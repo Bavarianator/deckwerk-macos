@@ -153,3 +153,7 @@ Kalibriert werden damit `WRAP_SLACK` (Breitenreserve der Textboxen) und die Zeil
 Ergebnis (26.09.2026): LibreOffice rendert eine eingebettete Familie, die auf dem System nicht existiert, in Regular und Bold aus der PPTX. Die Abnahme in PowerPoint (Datei → Informationen → eingebettete Schriften, Anzeige ohne Reparatur) steht noch aus.
 
 Randbedingungen: nur statische TTF (keine variablen Fonts), der `fontFace` im Text muss exakt dem Familiennamen der Schrift entsprechen, `fsType` „restricted“ wird beim Einbetten ausmaskiert, die Lizenz muss Einbettung erlauben. Für Premium-Themes liegen die TTFs dann unter `assets/fonts/` und werden nach `injectAnimations` per `embedFonts(buf, [{ family, regular, bold, serif }])` eingebettet.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE). Mitgelieferte Schriften stehen unter der SIL Open Font License (`assets/fonts/OFL-*.txt`), Beispielfotos unter der Unsplash-Lizenz (`examples/assets/CREDITS.md`, `assets/samples/CREDITS.md`).

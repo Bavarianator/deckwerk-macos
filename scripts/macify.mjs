@@ -18,13 +18,14 @@ const patch = (file, pairs) => {
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
 for (const k of Object.keys(pkg.scripts)) pkg.scripts[k] = pkg.scripts[k].replace(/ (-- )?--ozone-platform=x11/g, '')
 pkg.author = 'Deckwerk'
+pkg.license = 'MIT'
 pkg.scripts.dist = 'electron-vite build && electron-builder --mac'
 pkg.scripts['sync:linux'] = 'sh scripts/sync-linux.sh'
 // Ein Schritt statt DMG: App bauen und direkt nach /Applications legen (erscheint in Launchpad und Spotlight)
 pkg.scripts['install:mac'] = 'electron-vite build && electron-builder --mac --dir --arm64 && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo "Deckwerk liegt in /Applications (Launchpad, Spotlight)"'
 pkg.devDependencies['electron-builder'] = '^26.0.0'
 pkg.build = {
-  appId: 'de.deckwerk.app', productName: 'Deckwerk', copyright: 'Deckwerk',
+  appId: 'de.deckwerk.app', productName: 'Deckwerk', copyright: 'Copyright © 2026 Bavarianator',
   directories: { output: 'dist', buildResources: 'assets' },
   // Main und Renderer sind gebündelt; transformers/onnxruntime/sharp braucht zur Laufzeit niemand
   // onnxruntime-node (Freisteller) ist nativ: außerhalb des asar ablegen und nur die macOS-arm64-Binärdateien mitnehmen

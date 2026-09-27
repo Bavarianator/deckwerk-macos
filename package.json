@@ -58,7 +58,7 @@
   "build": {
     "appId": "de.deckwerk.app",
     "productName": "Deckwerk",
-    "copyright": "Deckwerk",
+    "copyright": "Copyright © 2026 Bavarianator",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -96,5 +96,6 @@
       "title": "Deckwerk",
       "artifactName": "Deckwerk-${arch}.${ext}"
     }
-  }
+  },
+  "license": "MIT"
 }
