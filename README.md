@@ -33,7 +33,7 @@ Terminal öffnen und einfügen:
 curl -fsSL https://raw.githubusercontent.com/Bavarianator/deckwerk-macos/main/install.sh | sh
 ```
 
-Das Skript lädt die DMG des neuesten Releases, kopiert Deckwerk nach `/Applications` und startet es. Derselbe Befehl aktualisiert später. Eine bestimmte Version: `… | sh -s v0.1.1`.
+Das Skript lädt die DMG des neuesten Releases, kopiert Deckwerk nach `/Applications` und startet es. Derselbe Befehl aktualisiert später. Eine bestimmte Version: `… | sh -s v0.1.2`.
 
 Die App ist nicht von Apple notarisiert. Weil die Datei per `curl` kommt, trägt sie keine Quarantäne-Markierung, und macOS fragt nicht nach. Das umgeht die Gatekeeper-Prüfung bewusst. Führe den Befehl nur aus, wenn du diesem Repo vertraust. Das Skript ist kurz, lies es vorher: [install.sh](install.sh).
 
