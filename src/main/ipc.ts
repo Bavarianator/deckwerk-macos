@@ -1,7 +1,7 @@
 // IPC zwischen UI und Main: aktuelles Deck, Agent, Speichern/Öffnen, Export, API-Key.
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, screen, shell } from 'electron'
 import { execFile, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -33,11 +33,12 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   const setupFile = join(app.getPath('userData'), 'setup-done')
   let deck: Deck | null = null
   let path: string | null = null // …/deck.json, null = noch nie gespeichert
+  let dirty = false // Änderungen (UI oder KI) seit dem letzten Speichern
   let agent: DeckAgent | ClaudeAgent | null = null
   const claude = findClaude() // ohne API-Key läuft der Chat über Claude Code (Abo-Login)
 
   const emit = (e: AgentEvent) => {
-    if (e.type === 'deck') deck = e.deck
+    if (e.type === 'deck') { deck = e.deck; dirty = true }
     if (!win.isDestroyed()) win.webContents.send('agent:event', e)
   }
   const apiKey = () => {
@@ -49,7 +50,19 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     return process.env.ANTHROPIC_API_KEY
   }
   const state = () => ({ deck, path, hasKey: existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY || !!claude, setupDone: existsSync(setupFile) })
+  // Auto-Speichern: der Renderer speichert 1,5 s nach jeder Änderung. Was in diesem Fenster noch offen ist, sichert
+  // flush() synchron, bevor ein anderes Deck geladen oder das Fenster geschlossen wird.
+  const flush = () => {
+    if (!dirty || !deck) return
+    path ??= join(freeDir(deck.title), 'deck.json')
+    writeFileSync(path, JSON.stringify(deck, null, 2))
+    dirty = false
+  }
+  win.on('closed', () => {
+    try { flush() } catch (e) { console.error('[ipc] Speichern beim Schließen fehlgeschlagen:', e) }
+  })
   const reset = (d: Deck | null, p: string | null) => {
+    flush()
     agent?.abort()
     agent = null // neues Deck = neues Gespräch
     deck = d
@@ -71,6 +84,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   ipcMain.handle('state', state)
   ipcMain.handle('deck:set', (_, d: Deck) => {
     deck = d
+    dirty = true
     agent?.setDeck(d)
   })
   ipcMain.handle('deck:new', () => reset(null, null))
@@ -103,9 +117,11 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
 
   ipcMain.handle('deck:save', async () => {
     if (!deck) throw new Error('Es gibt noch kein Deck zum Speichern.')
-    path ??= join(await freeDir(deck.title), 'deck.json')
+    path ??= join(freeDir(deck.title), 'deck.json')
     await snapshot(path)
-    await writeFile(path, JSON.stringify(deck, null, 2))
+    const json = JSON.stringify(deck, null, 2)
+    dirty = false // vor dem Schreiben: eine Änderung, die währenddessen kommt, bleibt markiert
+    await writeFile(path, json)
     return path
   })
 
@@ -221,10 +237,10 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   ipcMain.handle('templates:list', () =>
     ['foto', 'canva-look', 'quartal', 'strategie'].flatMap((name) => {
       const file = join(app.getAppPath(), 'examples', `${name}.json`)
-      try { return [localizeDeck(readDeck(file), dirname(file))] } catch { return [] }
+      try { return [readDeck(file)] } catch { return [] }
     }))
   ipcMain.handle('deck:saveCopy', async (_, copy: Deck) => {
-    const file = join(await freeDir(copy.title), 'deck.json')
+    const file = join(freeDir(copy.title), 'deck.json')
     await writeFile(file, JSON.stringify(copy, null, 2))
     return file
   })
@@ -241,7 +257,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     audience?.close()
     audience = new BrowserWindow({
       ...other.bounds, fullscreen: true, frame: false, backgroundColor: '#000000', title: 'Deckwerk – Präsentation',
-      webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false },
+      webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true },
     })
     audience.on('closed', () => { audience = null; if (!win.isDestroyed()) win.webContents.send('present:ended') })
     if (process.env.ELECTRON_RENDERER_URL) audience.loadURL(`${process.env.ELECTRON_RENDERER_URL}#audience`)
@@ -300,14 +316,14 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
 function readDeck(file: string): Deck {
   const d = JSON.parse(readFileSync(file, 'utf8'))
   if (!Array.isArray(d?.slides) || !d.theme) throw new Error('Das ist keine gültige deck.json.')
-  return d
+  return localizeDeck(d, dirname(file)) // relative Bildpfade (Deck-Ordner mit assets/ weitergegeben) auflösen
 }
 
 // ~/Deckwerk/<titel-slug>, bei Kollision mit -2, -3 …
-async function freeDir(title: string): Promise<string> {
+function freeDir(title: string): string {
   const slug = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'deck'
   let dir = join(HOME, slug)
   for (let i = 2; existsSync(dir); i++) dir = join(HOME, `${slug}-${i}`)
-  await mkdir(dir, { recursive: true })
+  mkdirSync(dir, { recursive: true })
   return dir
 }

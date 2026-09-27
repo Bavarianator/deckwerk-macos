@@ -18,7 +18,9 @@ const patch = (file, pairs) => {
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
 for (const k of Object.keys(pkg.scripts)) pkg.scripts[k] = pkg.scripts[k].replace(/ (-- )?--ozone-platform=x11/g, '')
 pkg.author = 'Deckwerk'
-pkg.license = 'MIT'
+pkg.license = 'AGPL-3.0-only'
+// Eigene Versionsnummer der macOS-Ausgabe (die Linux-Version bleibt bei ihrer); Tag v<version> baut das Release
+pkg.version = '0.1.1'
 pkg.scripts.dist = 'electron-vite build && electron-builder --mac'
 pkg.scripts['sync:linux'] = 'sh scripts/sync-linux.sh'
 // Ein Schritt statt DMG: App bauen und direkt nach /Applications legen (erscheint in Launchpad und Spotlight)

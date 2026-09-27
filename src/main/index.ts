@@ -2,7 +2,7 @@ import { app, BrowserWindow, net, protocol } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Deck } from '../shared/deck'
+import { MEDIA_EXT } from '../shared/deck'
 import type { createEngine } from './engine'
 
 // macOS: Aus Finder/Dock gestartet erbt die App nur /usr/bin:/bin:/usr/sbin:/sbin. Homebrew und ~/.local/bin fehlen,
@@ -15,12 +15,18 @@ if (['--mcp', '--render', '--check'].some((f) => process.argv.includes(f))) app.
 // und der Renderer lädt parallel zum Main-Prozess. Die Preload-Brücke wiederholt Aufrufe, bis registerIpc steht.
 const loadEngine = async () => (await import('./engine')).createEngine()
 
+// Kein Fenster navigiert weg oder öffnet neue (z. B. ein auf die Folie gezogener Link): fremde Seiten bekämen sonst die Preload-API
+app.on('web-contents-created', (_, wc) => {
+  wc.on('will-navigate', (e) => e.preventDefault())
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }))
+})
+
 protocol.registerSchemesAsPrivileged([{ scheme: 'asset', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }])
 
 function createWindow() {
   const win = new BrowserWindow({
     width: 1600, height: 960, minWidth: 1200, minHeight: 760, backgroundColor: '#ffffff', title: 'Deckwerk',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false },
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true },
   })
   win.removeMenu() // keine native Menüleiste (File/Edit/View) unter Linux/Windows; macOS behält sein App-Menü
   // DW_SHOT=<file.png>: screenshot the real app once it has settled, then quit (visual verification)
@@ -53,7 +59,9 @@ async function renderCli(engine: ReturnType<typeof createEngine>, file: string, 
 app.whenReady().then(async () => {
   // CORS-Header, damit Canvas Pixel lesen darf (Video-Poster, Freisteller); stream + Range für Video/Audio
   protocol.handle('asset', async (req) => {
-    const res = await net.fetch(pathToFileURL(decodeURIComponent(new URL(req.url).pathname)).toString(), { headers: req.headers })
+    const file = decodeURIComponent(new URL(req.url).pathname)
+    if (!MEDIA_EXT.test(file)) return new Response(null, { status: 403 })
+    const res = await net.fetch(pathToFileURL(file).toString(), { headers: req.headers })
     const headers = new Headers(res.headers)
     headers.set('Access-Control-Allow-Origin', '*')
     return new Response(res.body, { status: res.status, headers })

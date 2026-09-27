@@ -24,7 +24,7 @@ setInterval(s,1000);s()</script>`
 export async function startRemote(onCmd: (c: 'next' | 'prev') => void): Promise<string> {
   stopRemote()
   const token = randomBytes(16).toString('hex')
-  const ok = (t: string | null) => !!t && t.length === token.length && timingSafeEqual(Buffer.from(t), Buffer.from(token))
+  const ok = (t: string | null) => { const b = Buffer.from(t ?? ''); return b.length === token.length && timingSafeEqual(b, Buffer.from(token)) }
   server = createServer((req, res) => {
     const u = new URL(req.url ?? '/', 'http://remote')
     if (!ok(u.searchParams.get('t'))) return void res.writeHead(403).end()
@@ -36,7 +36,9 @@ export async function startRemote(onCmd: (c: 'next' | 'prev') => void): Promise<
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(PAGE)
   })
   await new Promise<void>((resolve, reject) => server!.once('error', reject).listen(0, '0.0.0.0', resolve))
-  const ip = Object.values(networkInterfaces()).flat().find((a) => a?.family === 'IPv4' && !a.internal)?.address
+  // ponytail: erste echte Schnittstelle; virtuelle (Docker, VM, VPN) per Namensliste übersprungen, sonst Auswahl anbieten
+  const ip = Object.entries(networkInterfaces()).filter(([name]) => !/^(docker|br-|veth|virbr|vboxnet|vmnet|tun|tap|wg|utun|tailscale|zt)/.test(name))
+    .flatMap(([, a]) => a ?? []).find((a) => a.family === 'IPv4' && !a.internal)?.address
   if (!ip) {
     stopRemote()
     throw new Error('Kein Netzwerk gefunden. Handy und Rechner müssen im selben WLAN sein.')

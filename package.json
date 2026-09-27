@@ -1,9 +1,11 @@
 {
   "name": "deckwerk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "KI-Präsentationsstudio",
+  "license": "AGPL-3.0-only",
   "main": "out/main/index.js",
   "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
@@ -96,6 +98,5 @@
       "title": "Deckwerk",
       "artifactName": "Deckwerk-${arch}.${ext}"
     }
-  },
-  "license": "MIT"
+  }
 }
