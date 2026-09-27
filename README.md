@@ -162,18 +162,14 @@ Dieses Repo ist die macOS-Ausgabe von `~/deckwerk`. Auf dem Rechner mit beiden O
 npm run sync:linux    # kopiert ~/deckwerk (oder DECKWERK_LINUX=…) und wendet scripts/macify.mjs an
 ```
 
-`macify.mjs` enthält alle macOS-Anpassungen und ist idempotent. Bricht es mit „Ankerstelle fehlt“ ab, hat sich die gepatchte Stelle im Linux-Code geändert und der Patch muss nachgezogen werden. Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, `.github/`, `assets/icon-mac.png`, `scripts/deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
+Das Verhalten auf dem Mac steckt per `process.platform` im gemeinsamen Code: `PATH` um Homebrew und `~/.local/bin` ergänzt (aus Finder oder Dock gestartete Apps erben ihn nicht), kein Dock-Symbol ohne Fenster, Beenden beim Schließen des Fensters, Freisteller über CoreML und ohne die Linux-Sperre bei wenig freiem RAM, MCP-Eintrag der installierten App, ⌥⌘P zum Präsentieren.
 
-Was `macify.mjs` gegenüber Linux ändert:
+`scripts/macify.mjs` erledigt nur noch, was ausschließlich den Mac-Build betrifft, und ist idempotent:
 
-- DMG-Build für arm64 mit electron-builder, ad-hoc signiert ohne Hardened Runtime. Mit Developer-ID-Secrets signiert und notarisiert der CI-Build.
-- Im Paket nur die Laufzeit-Module (`ajv`, `onnxruntime-node` mit arm64-Binärdateien), alles andere ist gebündelt.
-- `PATH` um Homebrew und `~/.local/bin` ergänzt, weil aus Finder oder Dock gestartete Apps sie nicht erben.
-- Freisteller über CoreML statt nur CPU, ohne die Linux-Sperre bei wenig freiem RAM (macOS zählt Dateicache als belegt).
-- ⌘ statt Strg in allen Anzeigen, ⌥⌘P zum Präsentieren, „Finder“ statt „Dateimanager“.
-- App beendet sich beim Schließen des Fensters; ohne Fenster (MCP, Render-CLI) kein Dock-Symbol.
-- MCP-Eintrag der installierten App ruft das App-Binary direkt auf.
-- Kein X11-Flag, relative Pfade in den Beispiel-Decks, Info.plist-Text für das lokale Netzwerk.
+- `package.json`: DMG-Build für arm64 mit electron-builder, ad-hoc signiert ohne Hardened Runtime (mit Developer-ID-Secrets signiert und notarisiert der CI-Build), im Paket nur die Laufzeit-Module (`ajv`, `onnxruntime-node` mit arm64-Binärdateien), Info.plist-Text für das lokale Netzwerk, eigene Versionsnummer, keine X11-Flags.
+- Anzeigen: ⌘ statt Strg, ⌥⌘P statt F5, „Finder“ statt „Dateimanager“.
+
+Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, `.github/`, `assets/icon-mac.png`, `scripts/deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
 
 ### Skripte
 

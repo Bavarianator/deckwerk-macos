@@ -523,7 +523,7 @@ async function unsplash(ctx: ToolContext, query: string, limit: number, orientat
   for (const h of hits) {
     // 1920 px statt „regular“ (1080): Vollbildfotos werden mit 2560 px exportiert
     const [full, thumb] = await Promise.all([get(`${h.urls.raw}&w=1920&q=82&fm=jpg`).then((r) => r.arrayBuffer()), get(h.urls.small).then((r) => r.arrayBuffer())])
-    const file = join(ctx.assetDir, `unsplash-${h.id}.jpg`)
+    const file = join(ctx.assetDir, `unsplash-${h.id.replace(/[^\w-]/g, '')}.jpg`)
     writeFileSync(file, Buffer.from(full))
     get(h.links.download_location).catch(() => {}) // Unsplash-Richtlinie: Download zählen
     lines.push(`${assetUrl(file)} — 1920×${Math.round((1920 * h.height) / h.width)} px, ${h.alt_description ?? h.description ?? query} (Foto: ${h.user.name} / Unsplash, ${h.user.links.html})`)
