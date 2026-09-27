@@ -62,7 +62,7 @@ Selbst gebaut startet die App ohne Rückfrage. `npm run dist` baut stattdessen e
 
 ## Erster Start
 
-Ein Einrichtungsassistent führt durch fünf Schritte:
+Ein Einrichtungsassistent führt durch die Einrichtung (jederzeit überspringbar):
 
 1. **KI-Zugang**: Ist Claude Code installiert und angemeldet, nutzt Deckwerk dessen Login. Sonst den API-Key eintragen. Er liegt verschlüsselt über den macOS-Schlüsselbund auf deinem Mac.
 2. **Modell**: Opus 5.5 (Standard), Fable 5.1 (am stärksten, langsamer), Sonnet 5 (schneller) oder Haiku 4.5 (für kleine Änderungen). Umschalten geht später jederzeit im Chat.
