@@ -2,7 +2,7 @@
 
 KI-Präsentationsstudio für den Mac. Ein Satz genügt: Deckwerk schreibt die Storyline, baut die Folien und prüft jede einzelne als Bild. Danach gestaltest du frei weiter wie in Canva und exportierst nach PowerPoint, PDF oder als Bilder.
 
-Das ist die macOS-Ausgabe (Apple Silicon) des Linux-Projekts Deckwerk.
+Das ist die macOS-Ausgabe (Apple Silicon) von [Deckwerk](https://github.com/Bavarianator/deckwerk) für Linux.
 
 ## Was Deckwerk kann
 
