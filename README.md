@@ -8,8 +8,8 @@ Das ist die macOS-Ausgabe (Apple Silicon) von [Deckwerk](https://github.com/Bava
 
 - **Aus einem Satz ein Deck**: Storyline mit Action Titles, passende Layouts, Diagramme und Animationen. Die KI rendert jede Folie und prüft sie auf Überlauf, Kontrast und Aufbau.
 - **Aus vorhandenem Material**: Datei auf den Startbildschirm ziehen (TXT, MD, CSV, JSON, DOCX, PPTX, PDF). Bei PPTX kommen auch die Bilder je Folie mit.
-- **Frei gestalten**: Text, Formen, Fotos, Icons, Diagramme und QR-Codes direkt auf der Folie. Einrasten, Gruppieren, Ebenen, Freisteller für Fotos, Farben eines Decks mit einem Klick umfärben.
-- **Ein Look für alles**: Themes, eigene Designs von der KI, Formate von 16:9 und 4:3 über Quadrat, 4:5 und Story (9:16) bis A4 und Link-Vorschau.
+- **Frei gestalten**: Text, Formen, Fotos, Icons, Diagramme, QR-Codes, Video und Audio direkt auf der Folie. Einrasten, Gruppieren, Ebenen, Zuschnitt, Freisteller für Fotos, Farben eines Decks mit einem Klick umfärben, Layout-Folien in freie Elemente umwandeln.
+- **Ein Look für alles**: Themes, eigene Designs von der KI, Formate von 16:9 und 4:3 über Quadrat, 4:5 und Story (9:16) bis A4 und Link-Vorschau, dazu ein Hausstil, den sich die KI dauerhaft merkt.
 - **Präsentieren**: Vollbild, Referentenansicht mit Notizen und Zeit, Laserpointer und Stift, Handy als Fernbedienung über das WLAN.
 - **Export**: PowerPoint (.pptx) mit echten, bearbeitbaren Objekten und Animationen, PDF, PNG je Folie, Handout (Markdown).
 - **Auch aus Claude Code, Codex und Vibe**: Deckwerk ist zugleich ein MCP-Server. Deine Agenten bauen und bearbeiten Decks dann direkt aus dem Terminal.
@@ -65,7 +65,7 @@ Selbst gebaut startet die App ohne Rückfrage. `npm run dist` baut stattdessen e
 Ein Einrichtungsassistent führt durch die Einrichtung (jederzeit überspringbar):
 
 1. **KI-Zugang**: Deckwerk findet Claude Code, Codex und Vibe von selbst. Der Chat läuft über den Login des ersten gefundenen, bei mehreren wählst du per Klick. Ohne CLI trägst du einen Anthropic-API-Key ein; er liegt verschlüsselt über den macOS-Schlüsselbund auf deinem Mac und hat Vorrang.
-2. **Modell**: Für Claude: Opus 5.5 (Standard), Fable 5.1 (am stärksten, langsamer), Sonnet 5 (schneller) oder Haiku 4.5 (für kleine Änderungen). Umschalten geht später jederzeit im Chat. Codex und Vibe nehmen das Modell aus ihrer eigenen Einstellung.
+2. **Modell**: Das Modell bestimmt auch, worüber der Chat läuft: Claude (Opus 5.5, Fable 5.1, Sonnet 5, Haiku 4.5), die Modelle aus deiner Vibe-Einstellung oder aus dem Codex-Katalog. Umschalten geht später jederzeit im Chat.
 3. **Agenten**: Ein Klick trägt Deckwerk als MCP-Server in Claude Code, Codex und Vibe ein, einzeln oder in alle gefundenen zugleich.
 4. **Testen**: Eine kurze Probeanfrage zeigt, dass alles läuft.
 
@@ -91,15 +91,59 @@ Beim Präsentieren: → / Leertaste weiter, ← zurück, P Referentenansicht, L 
 
 Bilder lassen sich aus dem Finder direkt auf die Folie ziehen. Ein Klick auf ein Element öffnet eine KI-Leiste für Wünsche genau zu diesem Element.
 
+## Mit der KI arbeiten
+
+- Der Chat unten im Editor nimmt Wünsche fürs ganze Deck entgegen. Er weiß immer, welche Folie du gerade ansiehst. Ein Klick auf ein Element der Folie öffnet eine KI-Leiste für genau dieses Element.
+- Das **Modell** wählst du im Dropdown neben dem Eingabefeld. Es bestimmt auch, worüber der Chat läuft:
+  - **Claude:** Opus 5.5 (Standard), Fable 5.1, Sonnet 5 oder Haiku 4.5, über den API-Key oder Claude Code.
+  - **Vibe:** die Modelle aus deiner Vibe-Einstellung.
+  - **Codex:** die Modelle aus dem Codex-Katalog.
+
+  Angeboten wird nur, was installiert ist. Die Wahl gilt ab der nächsten Nachricht und bleibt gespeichert. Wechselst du den Anbieter, beginnt ein neues Gespräch; das Deck bleibt. Vibe und Codex antworten spürbar langsamer als Claude.
+- Unter den Notizen schreibt „Schreiben lassen“ die Sprechernotizen, „Überarbeiten“ verbessert vorhandene. Daneben steht die geschätzte Sprechzeit.
+- **Hausstil:** Sag „merk dir …“, und die KI trägt die Vorliebe in `~/Deckwerk/hausstil.md` ein. Die Datei gilt für jedes künftige Deck und lässt sich von Hand bearbeiten.
+- **Fotos:** Die KI nutzt zuerst deine Bilder aus `~/Deckwerk/assets`. Findet sie dort nichts Passendes und ist `UNSPLASH_ACCESS_KEY` gesetzt, sucht sie auf Unsplash und übernimmt den Bildnachweis in die Notizen.
+
+## Speichern und Versionen
+
+Deckwerk speichert automatisch. Jede Änderung, ob von dir oder von der KI, landet nach 1,5 Sekunden in `~/Deckwerk/<titel>/deck.json`. Schließt du das Fenster oder öffnest ein anderes Deck, sichert Deckwerk offene Änderungen vorher.
+
+Höchstens alle 10 Minuten legt Deckwerk den vorigen Stand unter `<deck>/versions/` ab, pro Deck bis zu 100 Versionen. Um zu einer Version zurückzukehren, öffnest du sie über „Deck öffnen“. Sie wird wieder zum Deck, und der bisherige Stand wandert selbst in die Versionen.
+
+Ein Deck-Ordner lässt sich weitergeben: Bildpfade relativ zur deck.json (`assets/foto.jpg`) löst Deckwerk beim Öffnen auf.
+
 ## Wo deine Daten liegen
 
 | Ort | Inhalt |
 |---|---|
-| `~/Deckwerk/` | Deine Decks (`<titel>/deck.json`), eigene Bilder (`assets/`), Exporte |
+| `~/Deckwerk/<titel>/deck.json` | Deine Decks; Exporte landen daneben |
+| `~/Deckwerk/<titel>/versions/` | Frühere Stände eines Decks |
+| `~/Deckwerk/assets/` | Eigene, eingefügte und freigestellte Bilder, geladene Fotos |
+| `~/Deckwerk/hausstil.md` | Hausstil für alle Decks |
 | `~/Deckwerk/models/` | Modell für den Freisteller (rund 200 MB, lädt beim ersten Einsatz von Hugging Face) |
 | `~/Library/Application Support/Deckwerk/` | Einstellungen und der verschlüsselte API-Key |
 
 Updates lassen alles davon unangetastet.
+
+## Datenschutz und Sicherheit
+
+- **Was an die KI geht:** Deine Wünsche, der Inhalt des Decks, angehängtes Quellmaterial und gerenderte Folienbilder gehen an den Anbieter deines KI-Zugangs: Anthropic (API oder Claude Code), OpenAI (Codex) oder Mistral (Vibe). Bei einer Web-Recherche ruft die KI Webseiten ab.
+- **Chat über Claude Code, Codex oder Vibe:** Das CLI bekommt nur die Deckwerk-Werkzeuge (dazu Web-Recherche), keine Shell und keine Dateiwerkzeuge. Ein präpariertes Quelldokument kann so keine Befehle auf deinem Mac ausführen.
+- **Was lokal bleibt:** Freisteller, Rendering und Export laufen auf deinem Mac.
+- **Fremde Decks:** Decks binden nur Bilder (PNG, JPEG, GIF, WebP, SVG, AVIF, BMP), Video, Audio und Schriften ein. Andere Dateien verweigert Deckwerk. So kann ein fremdes Deck keine privaten Dateien in einen Export ziehen.
+- **App-Fenster:** Alle Fenster laufen in der Chromium-Sandbox und können nicht auf fremde Seiten wechseln.
+- **Handy-Fernbedienung:** Sie läuft nur, solange du sie in der Referentenansicht geöffnet hast. Die Verbindung geht über HTTP mit einem zufälligen Token und ist unverschlüsselt, in fremden WLANs also mitlesbar.
+- **Signatur:** Die App ist ad-hoc signiert, aber nicht von Apple notarisiert (siehe „Notarisieren“).
+
+## Grenzen
+
+- Nur Macs mit Apple Silicon. Nicht notarisiert, daher beim DMG-Weg einmal „Trotzdem öffnen“. Kein Auto-Update: der Installationsbefehl aktualisiert.
+- Die PowerPoint-Dateien sind gegen LibreOffice geprüft. Die Abnahme in echtem PowerPoint (Umbrüche, Animationen, eingebettete Schriften) steht noch aus.
+- Diagramme sind in PowerPoint nativ und sehen deshalb leicht anders aus als in der Vorschau.
+- Text-Deckkraft kommt nicht in PowerPoint an, und Gruppen landen dort als Einzelobjekte.
+- Gedrehte Bilder lassen sich erst nach Drehung auf 0° zuschneiden.
+- Es gibt keine Echtzeit-Zusammenarbeit.
+- Codex ist mit einem angemeldeten Konto noch nicht getestet, weder als Chat noch als MCP-Client. Getestet sind Einrichtung und Modellliste.
 
 ## Aktualisieren und Deinstallieren
 
@@ -118,7 +162,7 @@ codex mcp add deckwerk -- /Applications/Deckwerk.app/Contents/MacOS/Deckwerk --m
 
 Decks landen unter `~/Deckwerk/<titel>/deck.json`. Die Umgebungsvariable `DECKWERK_HOME` wählt einen anderen Ordner.
 
-**Der Chat in der App über deinen Agenten:** Ohne API-Key läuft der Chat über `claude -p`, `codex exec` oder `vibe -p` mit deinem Login. Das CLI bekommt dabei nur die Deckwerk-Werkzeuge und die Web-Recherche, keine Shell und keine Dateiwerkzeuge. Ein präpariertes Quelldokument kann so keine Befehle auf deinem Mac ausführen. Der Chat über Codex ist noch nicht mit einem angemeldeten Codex getestet; Claude Code und Vibe sind es.
+**Der Chat in der App über deinen Agenten:** Wählst du im Modell-Dropdown ein Vibe- oder Codex-Modell oder hast du keinen API-Key, läuft der Chat über `claude -p`, `codex exec` oder `vibe -p` mit deinem Login. Das CLI bekommt dabei nur die Deckwerk-Werkzeuge und die Web-Recherche, keine Shell und keine Dateiwerkzeuge. Ein präpariertes Quelldokument kann so keine Befehle auf deinem Mac ausführen. Der Chat über Codex ist noch nicht mit einem angemeldeten Codex getestet; Claude Code und Vibe sind es.
 
 ## Probleme und Lösungen
 
@@ -174,7 +218,7 @@ Das Verhalten auf dem Mac steckt per `process.platform` im gemeinsamen Code: `PA
 - `package.json`: DMG-Build für arm64 mit electron-builder, ad-hoc signiert ohne Hardened Runtime (mit Developer-ID-Secrets signiert und notarisiert der CI-Build), im Paket nur die Laufzeit-Module (`ajv`, `onnxruntime-node` mit arm64-Binärdateien), Info.plist-Text für das lokale Netzwerk, eigene Versionsnummer, keine X11-Flags.
 - Anzeigen: ⌘ statt Strg, ⌥⌘P statt F5, „Finder“ statt „Dateimanager“.
 
-Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, `.github/`, `assets/icon-mac.png`, `scripts/deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
+Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, und den Linux-Installer `scripts/install.sh` holt er gar nicht erst, `.github/`, `assets/icon-mac.png`, `scripts/deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
 
 ### Skripte
 
@@ -192,9 +236,17 @@ Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, 
 | `npm run open [-- exports/<datei>]` | Export mit der Standard-App öffnen (Keynote, PowerPoint, Vorschau) |
 | `npm run sync:linux` | Stand der Linux-Version übernehmen |
 
-### Chat über Claude Code
+### Chat über Claude Code, Codex und Vibe
 
-Ohne gespeicherten Key und ohne `ANTHROPIC_API_KEY` läuft der Chat über `claude -p` mit deinem Claude-Code-Login. Ein eingetragener Key hat Vorrang. `src/main/claude-agent.ts` öffnet dafür einen MCP-Server auf `127.0.0.1` (zufälliger Port, Bearer-Token in einer 0600-Datei im Temp-Ordner), der die Werkzeuge des aktuellen App-Decks bereitstellt. So zeigt die Live-Vorschau jede Änderung sofort. Claude Code läuft dabei ohne eingebaute Tools, Hooks, Plugins und Skills aus deinen Settings (`--setting-sources ""`) und mit dem Deckwerk-Systemprompt. Folgenachrichten setzen die Sitzung per `--resume` fort. Das Modell geht per `--model` raus, die Liste steht in `src/shared/models.ts`.
+Welches CLI der Chat nutzt, folgt aus dem Modell im Dropdown (`src/shared/models.ts`: Claude-IDs, `vibe:<alias>`, `codex:<slug>`); ein Claude-Modell ohne API-Key läuft über Claude Code. `src/main/claude-agent.ts` öffnet dafür einen MCP-Server auf `127.0.0.1`: zufälliger Port, Bearer-Token nie auf der Kommandozeile (für Claude Code in einer 0600-Datei, die beim Beenden gelöscht wird, für Codex und Vibe in einer Umgebungsvariable des Kindprozesses). Der Prompt geht über stdin, die Live-Vorschau sieht jede Änderung sofort.
+
+Jedes CLI bekommt nur die Deckwerk-Werkzeuge und die Web-Recherche:
+
+- **Claude Code:** `--tools WebSearch,WebFetch`, `--strict-mcp-config`, ohne Hooks, Plugins und Skills aus deinen Einstellungen (`--setting-sources ""`). Folgenachrichten per `--resume`, Modell per `--model`.
+- **Codex:** `--ignore-user-config`, `shell_tool`, `unified_exec` und `hooks` aus, `sandbox_mode="read-only"`, `approval_policy="never"`, Systemprompt als `developer_instructions`, Modell per `-c model=…`. Folgenachrichten per `exec resume`.
+- **Vibe:** `VIBE_MCP_SERVERS` ersetzt deine MCP-Server, `--enabled-tools deckwerk_*` (plus `web_search`, `web_fetch`) sperrt alle anderen Werkzeuge, auch Shell und Dateien. Modell per `VIBE_ACTIVE_MODEL`, ohne Werkzeugsuche (`--legacy-harness`). Der Systemprompt steht vor der ersten Nachricht, Folgenachrichten per `--resume`.
+
+Test: `npm run smoke:claude`, für die anderen CLIs `DECKWERK_CLI=vibe` oder `codex` davor (samt Probe, dass Shell und Dateien gesperrt sind).
 
 ### PPTX-Treue-Check
 
