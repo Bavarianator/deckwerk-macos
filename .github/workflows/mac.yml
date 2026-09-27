@@ -60,6 +60,9 @@ jobs:
           test -s check/fenster.png && echo "Fenster ok"
           run 600 "$BIN" --render examples/pitch.json --out check/render
           ls check/render/*.pptx check/render/*.pdf check/render/*/01.png && echo "Export ok"
+          # Vorlage aus dem Paket (app.asar) rendern: sind examples/ und ihre Fotos in der installierten App erreichbar?
+          run 600 "$BIN" --render "$APP/Contents/Resources/app.asar/examples/foto.json" --out check/vorlage
+          ls check/vorlage/*/01.png && echo "Vorlagen im Paket ok"
 
       - uses: actions/upload-artifact@v4
         if: always()

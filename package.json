@@ -68,6 +68,7 @@
     "files": [
       "out/**",
       "assets/**",
+      "examples/**",
       "package.json",
       "!node_modules/**",
       "node_modules/{ajv,ajv-formats,fast-deep-equal,fast-uri,json-schema-traverse,require-from-string,onnxruntime-common}/**",

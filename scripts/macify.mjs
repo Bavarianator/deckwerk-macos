@@ -23,7 +23,8 @@ pkg.build = {
   // onnxruntime-node (Freisteller) ist nativ: außerhalb des asar ablegen und nur die macOS-arm64-Binärdateien mitnehmen
   // Vite bündelt alles; zur Laufzeit lädt Main nur ajv (vom MCP-SDK per require erzeugt) und onnxruntime-node (nativ).
   // Daher node_modules per Whitelist: nur diese Pakete samt ihren Laufzeit-Abhängigkeiten, nur macOS-arm64-Binärdateien.
-  files: ['out/**', 'assets/**', 'package.json', '!node_modules/**',
+  // examples/: die Vorlagen auf dem Startbildschirm (templates:list liest sie aus dem App-Ordner)
+  files: ['out/**', 'assets/**', 'examples/**', 'package.json', '!node_modules/**',
     'node_modules/{ajv,ajv-formats,fast-deep-equal,fast-uri,json-schema-traverse,require-from-string,onnxruntime-common}/**',
     'node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}'],
   asarUnpack: ['node_modules/onnxruntime-node/**'],
