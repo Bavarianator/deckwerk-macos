@@ -11,11 +11,11 @@ Im Terminal, einmalig:
 xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 eval "$(/opt/homebrew/bin/brew shellenv)"
-brew install node gh
+brew install node
 node -p process.arch      # muss "arm64" sagen (sonst läuft Electron unter Rosetta)
 
-# 2. Quellcode holen (privates Repo: vorher `gh auth login`)
-gh repo clone Bavarianator/deckwerk-macos ~/deckwerk-macos
+# 2. Quellcode holen
+git clone https://github.com/Bavarianator/deckwerk-macos.git ~/deckwerk-macos
 cd ~/deckwerk-macos
 
 # 3. Bauen und installieren
