@@ -21,14 +21,18 @@ pkg.author = 'Deckwerk'
 pkg.scripts.dist = 'electron-vite build && electron-builder --mac'
 pkg.scripts['sync:linux'] = 'sh scripts/sync-linux.sh'
 // Ein Schritt statt DMG: App bauen und direkt nach /Applications legen (erscheint in Launchpad und Spotlight)
-pkg.scripts['install:mac'] = 'electron-vite build && electron-builder --mac --dir && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo "Deckwerk liegt in /Applications (Launchpad, Spotlight)"'
+pkg.scripts['install:mac'] = 'electron-vite build && electron-builder --mac --dir --arm64 && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo "Deckwerk liegt in /Applications (Launchpad, Spotlight)"'
 pkg.devDependencies['electron-builder'] = '^26.0.0'
 pkg.build = {
   appId: 'de.deckwerk.app', productName: 'Deckwerk', copyright: 'Deckwerk',
   directories: { output: 'dist', buildResources: 'assets' },
   // Main und Renderer sind gebündelt; transformers/onnxruntime/sharp braucht zur Laufzeit niemand
   // onnxruntime-node (Freisteller) ist nativ: außerhalb des asar ablegen und nur die macOS-arm64-Binärdateien mitnehmen
-  files: ['out/**', 'assets/**', 'package.json', '!node_modules/onnxruntime-node/bin/*/{linux,win32}/**', '!node_modules/onnxruntime-node/bin/*/darwin/x64/**'],
+  // Vite bündelt alles; zur Laufzeit lädt Main nur ajv (vom MCP-SDK per require erzeugt) und onnxruntime-node (nativ).
+  // Daher node_modules per Whitelist: nur diese Pakete samt ihren Laufzeit-Abhängigkeiten, nur macOS-arm64-Binärdateien.
+  files: ['out/**', 'assets/**', 'package.json', '!node_modules/**',
+    'node_modules/{ajv,ajv-formats,fast-deep-equal,fast-uri,json-schema-traverse,require-from-string,onnxruntime-common}/**',
+    'node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}'],
   asarUnpack: ['node_modules/onnxruntime-node/**'],
   npmRebuild: false,
   mac: { icon: 'assets/icon-mac.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }],
@@ -75,7 +79,7 @@ if (['--mcp', '--render', '--check'].some((f) => process.argv.includes(f))) app.
 const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]))
 for (const f of walk('src/renderer').filter((f) => /\.tsx?$/.test(f))) {
   const s = readFileSync(f, 'utf8')
-  const t = s.replace(/Strg\+(⇧\+|Umschalt\+)/g, '⌘⇧').replace(/Strg\+(\S)/g, '⌘$1').replaceAll('aus dem Dateimanager', 'aus dem Finder').replaceAll('<kbd>Strg</kbd>', '<kbd>⌘</kbd>')
+  const t = s.replace(/Strg\+(⇧\+|Umschalt\+)/g, '⌘⇧').replace(/Strg\+(\S)/g, '⌘$1').replaceAll('aus dem Dateimanager', 'aus dem Finder').replaceAll('<kbd>Strg</kbd>', '<kbd>⌘</kbd>').replaceAll('(F5)', '(⌥⌘P)').replaceAll('<kbd>F5</kbd>', '<kbd>⌥⌘P</kbd>')
   if (t !== s) writeFileSync(f, t)
 }
 // X11-Flag (nur Linux/Wayland) überall entfernen, wo Electron gestartet wird
@@ -96,5 +100,9 @@ for (const f of readdirSync('examples').filter((f) => f.endsWith('.json')).map((
 }
 patch('src/main/index.ts', [
   [`if ((k === 'src' || k === 'image') && typeof o[k] === 'string')`, `if ((k === 'src' || k === 'image' || k === 'poster') && typeof o[k] === 'string')`],
+])
+// Präsentieren: F5 braucht auf Mac-Tastaturen fn, daher zusätzlich ⌥⌘P wie in Keynote (e.code, weil ⌥P als „π“ ankommt)
+patch('src/renderer/App.tsx', [
+  [`else if (e.key === 'F5' && deck?.slides.length)`, `else if ((e.key === 'F5' || (e.metaKey && e.altKey && e.code === 'KeyP')) && deck?.slides.length)`],
 ])
 console.log('macOS-Anpassungen angewendet')

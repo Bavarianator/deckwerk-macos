@@ -1,0 +1,47 @@
+# Baut die macOS-App auf einem Apple-Silicon-Runner von GitHub und hängt die DMG an das Release „latest“.
+name: macOS-Build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm run dist
+
+      # Prüfen, ob das fertige Paket läuft: Signatur, natives onnxruntime (Freisteller), MCP-Server (lädt ajv aus node_modules)
+      - name: Paket prüfen
+        run: |
+          APP=dist/mac-arm64/Deckwerk.app
+          codesign --verify --deep --strict "$APP"
+          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Deckwerk" -e "require(process.resourcesPath + '/app.asar/node_modules/onnxruntime-node'); console.log('onnxruntime ok')"
+          { printf '%s\n' \
+              '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+              '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+              '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+            sleep 30; } | "$APP/Contents/MacOS/Deckwerk" --mcp > mcp.out
+          grep -q '"id":2' mcp.out && echo "MCP ok: $(grep -o '"name":"[a-z_]*"' mcp.out | wc -l) Werkzeuge"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Deckwerk-dmg
+          path: dist/*.dmg
+
+      - name: Release „latest“ aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/*.dmg --title "Deckwerk für macOS (neuester Stand)" \
+            --notes "Automatisch gebaut aus ${GITHUB_SHA::7}. Installation: DMG öffnen, Deckwerk in „Programme“ ziehen, beim ersten Start Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“."

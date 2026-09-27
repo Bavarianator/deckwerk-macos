@@ -77,7 +77,7 @@ export function TopBar(p: Props) {
             </div>
           )}
         </div>
-        <button className="pill tint" disabled={!p.hasDeck} onClick={p.onPresent} title="Präsentieren (F5)"><Play size={12} fill="currentColor" />Präsentieren</button>
+        <button className="pill tint" disabled={!p.hasDeck} onClick={p.onPresent} title="Präsentieren (⌥⌘P)"><Play size={12} fill="currentColor" />Präsentieren</button>
       </div>
     </header>
   )

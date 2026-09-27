@@ -4,6 +4,10 @@ KI-Präsentationsstudio als Desktop-App (Electron), macOS-Ausgabe.
 
 ## Installation auf dem Mac (Apple Silicon)
 
+**Am einfachsten, ohne selbst zu bauen:** Die DMG baut GitHub bei jedem Push automatisch auf einem Apple-Silicon-Mac: [Releases → latest](https://github.com/Bavarianator/deckwerk-macos/releases/tag/latest). DMG laden, öffnen, Deckwerk in „Programme“ ziehen. Beim ersten Start blockiert Gatekeeper die App (nicht notarisiert): Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“.
+
+Selbst bauen:
+
 Im Terminal, einmalig:
 
 ```sh

@@ -131,7 +131,7 @@ export function SetupSheet({ model, onModel, onKeySaved, onClose }: Props) {
         ))}
       </div>
       <div className="setup-keys">
-        <span><kbd>/</kbd> Wunsch an die KI</span><span><kbd>F5</kbd> Präsentieren</span><span><kbd>P</kbd> Referentenansicht</span><span><kbd>⌘</kbd>+<kbd>Z</kbd> Rückgängig</span>
+        <span><kbd>/</kbd> Wunsch an die KI</span><span><kbd>⌥⌘P</kbd> Präsentieren</span><span><kbd>P</kbd> Referentenansicht</span><span><kbd>⌘</kbd>+<kbd>Z</kbd> Rückgängig</span>
       </div>
     </>,
   ]

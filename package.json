@@ -20,7 +20,7 @@
     "fonts:fetch": "esbuild scripts/fetch-fonts.ts --bundle --packages=external --platform=node --format=esm --outfile=out/fetch-fonts.mjs --log-level=warning && node out/fetch-fonts.mjs",
     "dist": "electron-vite build && electron-builder --mac",
     "sync:linux": "sh scripts/sync-linux.sh",
-    "install:mac": "electron-vite build && electron-builder --mac --dir && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo \"Deckwerk liegt in /Applications (Launchpad, Spotlight)\""
+    "install:mac": "electron-vite build && electron-builder --mac --dir --arm64 && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo \"Deckwerk liegt in /Applications (Launchpad, Spotlight)\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -67,8 +67,9 @@
       "out/**",
       "assets/**",
       "package.json",
-      "!node_modules/onnxruntime-node/bin/*/{linux,win32}/**",
-      "!node_modules/onnxruntime-node/bin/*/darwin/x64/**"
+      "!node_modules/**",
+      "node_modules/{ajv,ajv-formats,fast-deep-equal,fast-uri,json-schema-traverse,require-from-string,onnxruntime-common}/**",
+      "node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}"
     ],
     "asarUnpack": [
       "node_modules/onnxruntime-node/**"
