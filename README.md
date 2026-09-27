@@ -20,13 +20,14 @@ cd ~/deckwerk-macos
 
 # 3. Bauen und installieren
 npm install
-npm run dist              # → dist/Deckwerk-<version>-arm64.dmg
-open dist/*.dmg           # Deckwerk in „Programme“ ziehen
+npm run install:mac       # baut Deckwerk.app und legt sie nach /Applications
 ```
+
+Danach steht Deckwerk wie jedes Mac-Programm in Launchpad und Spotlight (⌘ Leertaste → „Deckwerk“). Ins Dock: App einmal starten, Rechtsklick auf das Dock-Symbol → Optionen → Im Dock behalten. Als DMG zum Weitergeben: `npm run dist` → `dist/Deckwerk-<version>-arm64.dmg`.
 
 Die App ist nicht signiert. Lokal gebaut startet sie normal; wurde die DMG von einem anderen Rechner kopiert, einmal `xattr -cr /Applications/Deckwerk.app` ausführen (oder Rechtsklick → Öffnen).
 
-Aktualisieren: `cd ~/deckwerk-macos && git pull && npm install && npm run dist`, dann die neue DMG installieren.
+Aktualisieren: `cd ~/deckwerk-macos && git pull && npm install && npm run install:mac` (ersetzt die installierte App; Einstellungen und Decks unter `~/Deckwerk` bleiben).
 
 Ohne Installation direkt starten: `npm run dev`.
 
@@ -34,7 +35,7 @@ Chat: entweder API-Key in der App eintragen oder Claude Code installieren und an
 
 Unterschiede zur Linux-Version: Kürzel werden als ⌘ angezeigt, der Freisteller rechnet per CoreML auf Neural Engine/GPU (Fallback: CPU) und ohne die Linux-Sperre bei wenig freiem RAM, die App beendet sich beim Schließen des Fensters, und als MCP-Server oder Render-CLI erscheint kein Dock-Symbol.
 
-Linux-Stand übernehmen (nur auf dem Linux-Rechner mit `~/deckwerk`): `npm run sync:linux` kopiert `~/deckwerk` (oder `DECKWERK_LINUX=…`) hierher und wendet danach `scripts/macify.mjs` an. Bricht es mit „Ankerstelle fehlt“ ab, hat sich die gepatchte Stelle im Linux-Code geändert und muss in `macify.mjs` nachgezogen werden. Mac-eigene Dateien überschreibt der Sync nicht: README, `deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
+Linux-Stand übernehmen (nur auf dem Linux-Rechner mit `~/deckwerk`): `npm run sync:linux` kopiert `~/deckwerk` (oder `DECKWERK_LINUX=…`) hierher und wendet danach `scripts/macify.mjs` an. Bricht es mit „Ankerstelle fehlt“ ab, hat sich die gepatchte Stelle im Linux-Code geändert und muss in `macify.mjs` nachgezogen werden. Mac-eigene Dateien überschreibt der Sync nicht: README, `assets/icon-mac.png`, `deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
 
 MCP-Server mit der installierten App:
 

@@ -20,6 +20,8 @@ for (const k of Object.keys(pkg.scripts)) pkg.scripts[k] = pkg.scripts[k].replac
 pkg.author = 'Deckwerk'
 pkg.scripts.dist = 'electron-vite build && electron-builder --mac'
 pkg.scripts['sync:linux'] = 'sh scripts/sync-linux.sh'
+// Ein Schritt statt DMG: App bauen und direkt nach /Applications legen (erscheint in Launchpad und Spotlight)
+pkg.scripts['install:mac'] = 'electron-vite build && electron-builder --mac --dir && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && echo "Deckwerk liegt in /Applications (Launchpad, Spotlight)"'
 pkg.devDependencies['electron-builder'] = '^26.0.0'
 pkg.build = {
   appId: 'de.deckwerk.app', productName: 'Deckwerk', copyright: 'Deckwerk',
@@ -29,7 +31,7 @@ pkg.build = {
   files: ['out/**', 'assets/**', 'package.json', '!node_modules/onnxruntime-node/bin/*/{linux,win32}/**', '!node_modules/onnxruntime-node/bin/*/darwin/x64/**'],
   asarUnpack: ['node_modules/onnxruntime-node/**'],
   npmRebuild: false,
-  mac: { icon: 'assets/icon.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }], identity: null },
+  mac: { icon: 'assets/icon-mac.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }], identity: null },
   dmg: { title: 'Deckwerk' },
 }
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
@@ -84,14 +86,12 @@ patch('src/main/ipc.ts', [
   [`{ command: process.execPath, args: [app.getAppPath(), '--mcp'] }`,
    `app.isPackaged ? { command: process.execPath, args: ['--mcp'] } : { command: process.execPath, args: [app.getAppPath(), '--mcp'] }`],
 ])
-// Beispiel-Decks: absolute Linux-Pfade → relativ zur JSON-Datei; das Render-CLI löst sie auf der ganzen Folie auf
-// (auch freie Elemente und Video-Poster, nicht nur slide.content)
+// Beispiel-Decks: absolute Linux-Pfade → relativ zur JSON-Datei; das Render-CLI löst dann auch Video-Poster auf
 for (const f of readdirSync('examples').filter((f) => f.endsWith('.json')).map((f) => join('examples', f))) {
   const s = readFileSync(f, 'utf8'), t = s.replace(/asset:\/\/local\/[^"]*?\/examples\//g, '')
   if (t !== s) writeFileSync(f, t)
 }
 patch('src/main/index.ts', [
   [`if ((k === 'src' || k === 'image') && typeof o[k] === 'string')`, `if ((k === 'src' || k === 'image' || k === 'poster') && typeof o[k] === 'string')`],
-  [`deck.slides.forEach((s) => walk(s.content))`, `deck.slides.forEach((s) => walk(s))`],
 ])
 console.log('macOS-Anpassungen angewendet')

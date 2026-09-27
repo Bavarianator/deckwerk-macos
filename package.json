@@ -19,7 +19,8 @@
     "open": "node scripts/open.mjs",
     "fonts:fetch": "esbuild scripts/fetch-fonts.ts --bundle --packages=external --platform=node --format=esm --outfile=out/fetch-fonts.mjs --log-level=warning && node out/fetch-fonts.mjs",
     "dist": "electron-vite build && electron-builder --mac",
-    "sync:linux": "sh scripts/sync-linux.sh"
+    "sync:linux": "sh scripts/sync-linux.sh",
+    "install:mac": "electron-vite build && electron-builder --mac --dir && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && echo \"Deckwerk liegt in /Applications (Launchpad, Spotlight)\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -74,7 +75,7 @@
     ],
     "npmRebuild": false,
     "mac": {
-      "icon": "assets/icon.png",
+      "icon": "assets/icon-mac.png",
       "category": "public.app-category.productivity",
       "target": [
         {
