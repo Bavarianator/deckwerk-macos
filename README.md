@@ -25,7 +25,7 @@ npm run install:mac       # baut Deckwerk.app und legt sie nach /Applications
 
 Danach steht Deckwerk wie jedes Mac-Programm in Launchpad und Spotlight (⌘ Leertaste → „Deckwerk“). Ins Dock: App einmal starten, Rechtsklick auf das Dock-Symbol → Optionen → Im Dock behalten. Als DMG zum Weitergeben: `npm run dist` → `dist/Deckwerk-<version>-arm64.dmg`.
 
-Die App ist nicht signiert. Lokal gebaut startet sie normal; wurde die DMG von einem anderen Rechner kopiert, einmal `xattr -cr /Applications/Deckwerk.app` ausführen (oder Rechtsklick → Öffnen).
+Die App ist ad-hoc signiert (ohne Apple-Developer-ID, nicht notarisiert). Lokal gebaut startet sie normal. Wurde die DMG von einem anderen Rechner kopiert, blockiert Gatekeeper sie beim ersten Start: Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“, oder einmal `xattr -cr /Applications/Deckwerk.app`.
 
 Aktualisieren: `cd ~/deckwerk-macos && git pull && npm install && npm run install:mac` (ersetzt die installierte App; Einstellungen und Decks unter `~/Deckwerk` bleiben).
 

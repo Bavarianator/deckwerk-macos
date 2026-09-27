@@ -85,7 +85,8 @@
           ]
         }
       ],
-      "identity": null
+      "identity": "-",
+      "hardenedRuntime": false
     },
     "dmg": {
       "title": "Deckwerk"

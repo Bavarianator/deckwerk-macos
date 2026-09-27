@@ -31,7 +31,10 @@ pkg.build = {
   files: ['out/**', 'assets/**', 'package.json', '!node_modules/onnxruntime-node/bin/*/{linux,win32}/**', '!node_modules/onnxruntime-node/bin/*/darwin/x64/**'],
   asarUnpack: ['node_modules/onnxruntime-node/**'],
   npmRebuild: false,
-  mac: { icon: 'assets/icon-mac.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }], identity: null },
+  mac: { icon: 'assets/icon-mac.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }],
+    // Ad-hoc-Signatur ('-'): ohne Developer-ID. identity: null ließe das Bundle unversiegelt, Apple Silicon meldet dann „beschädigt“.
+    // Hardened Runtime nur für Notarisierung nötig; ohne Team-ID würde ihre Library Validation onnxruntime blockieren können.
+    identity: '-', hardenedRuntime: false },
   dmg: { title: 'Deckwerk' },
 }
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
