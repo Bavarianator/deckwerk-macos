@@ -4,7 +4,31 @@ KI-Präsentationsstudio als Desktop-App (Electron), macOS-Ausgabe.
 
 ## Installation auf dem Mac (Apple Silicon)
 
-**Am einfachsten, ohne selbst zu bauen:** Die DMG baut GitHub bei jedem Push automatisch auf einem Apple-Silicon-Mac: [Releases → latest](https://github.com/Bavarianator/deckwerk-macos/releases/tag/latest). DMG laden, öffnen, Deckwerk in „Programme“ ziehen. Beim ersten Start blockiert Gatekeeper die App (nicht notarisiert): Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“.
+**Am einfachsten**, im Terminal (Mac mit Apple Silicon):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bavarianator/deckwerk-macos/main/install.sh | sh
+```
+
+Das Skript lädt die DMG des neuesten Releases, kopiert Deckwerk nach `/Applications` und startet es. Derselbe Befehl aktualisiert später. Weil die Datei per `curl` kommt, trägt sie keine Quarantäne-Markierung, und Gatekeeper fragt nicht nach. Das umgeht die Prüfung bewusst: nur ausführen, wenn du diesem Repo vertraust.
+
+Alternativ die DMG von den [Releases](https://github.com/Bavarianator/deckwerk-macos/releases) laden, öffnen und Deckwerk in „Programme“ ziehen. Beim ersten Start blockiert Gatekeeper die App (nicht notarisiert): Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“.
+
+Die DMG baut GitHub bei jedem Push auf einem Apple-Silicon-Mac (`.github/workflows/mac.yml`) und prüft dabei das fertige Paket: Signatur, Start des Fensters, MCP-Server, Export nach PPTX/PDF/PNG. Push auf `main` → Release „latest“; Tag `v<version>` (passend zu `package.json`) → festes Release.
+
+### Notarisieren (optional, braucht Apple Developer Program, 99 $/Jahr)
+
+Dann öffnet sich die App ohne jede Warnung, auch aus dem Browser geladen. Der Workflow notarisiert automatisch, sobald diese Repository-Secrets gesetzt sind (Settings → Secrets and variables → Actions):
+
+| Secret | Inhalt |
+|---|---|
+| `MAC_CERT_P12_BASE64` | Zertifikat „Developer ID Application“ als .p12 exportiert (Schlüsselbundverwaltung), dann `base64 -i cert.p12 \| pbcopy` |
+| `MAC_CERT_PASSWORD` | Passwort des .p12-Exports |
+| `APPLE_ID` | Apple-ID des Developer-Accounts |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-spezifisches Passwort von account.apple.com |
+| `APPLE_TEAM_ID` | Team-ID (developer.apple.com → Membership) |
+
+Mit `gh`: `gh secret set APPLE_TEAM_ID -R Bavarianator/deckwerk-macos` usw. Danach baut jeder Push eine notarisierte DMG.
 
 Selbst bauen:
 

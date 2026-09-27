@@ -1,8 +1,10 @@
-# Baut die macOS-App auf einem Apple-Silicon-Runner von GitHub und hängt die DMG an das Release „latest“.
+# Baut die macOS-App auf einem Apple-Silicon-Runner von GitHub, testet das fertige Paket und veröffentlicht die DMG:
+# Push auf main → Release „latest“ (laufender Stand), Tag v1.2.3 → festes Release v1.2.3.
 name: macOS-Build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -17,31 +19,66 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
+      - name: Tag passt zur Version in package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "${GITHUB_REF_NAME}" = "v$(node -p 'require("./package.json").version')"
       - run: npm install --no-audit --no-fund
-      - run: npm run dist -- --publish never # veröffentlicht wird unten per gh release
+      # Mit Apple-Developer-Account (Secrets unten) signiert electron-builder mit der Developer ID und notarisiert;
+      # ohne Secrets ad-hoc signiert wie lokal. Veröffentlicht wird unten per gh release, daher --publish never.
+      - name: Bauen
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            npm run dist -- --publish never -c.mac.identity="$APPLE_TEAM_ID" -c.mac.hardenedRuntime=true
+          else
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            npm run dist -- --publish never
+          fi
 
-      # Prüfen, ob das fertige Paket läuft: Signatur, natives onnxruntime (Freisteller), MCP-Server (lädt ajv aus node_modules)
+      # Das fertige Paket prüfen, nicht den Quellcode: Signatur, natives onnxruntime (Freisteller),
+      # MCP-Server (lädt ajv aus node_modules), App-Fenster (Screenshot) und Export (PPTX/PDF/PNG)
       - name: Paket prüfen
         run: |
-          APP=dist/mac-arm64/Deckwerk.app
-          codesign --verify --deep --strict "$APP"
-          ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Deckwerk" -e "require(process.resourcesPath + '/app.asar/node_modules/onnxruntime-node'); console.log('onnxruntime ok')"
+          APP=dist/mac-arm64/Deckwerk.app; BIN="$APP/Contents/MacOS/Deckwerk"
+          run() { perl -e 'alarm shift; exec @ARGV' "$@"; } # macOS hat kein timeout(1)
+          mkdir -p check
+          codesign --verify --deep --strict "$APP" && echo "Signatur ok"
+          spctl -a -t exec "$APP" 2>/dev/null && echo "Gatekeeper: notarisiert" || echo "Gatekeeper: nicht notarisiert (ad-hoc signiert)"
+          ELECTRON_RUN_AS_NODE=1 "$BIN" -e "require(process.resourcesPath + '/app.asar/node_modules/onnxruntime-node'); console.log('onnxruntime ok')"
           { printf '%s\n' \
               '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
               '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
               '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
-            sleep 30; } | "$APP/Contents/MacOS/Deckwerk" --mcp > mcp.out
-          grep -q '"id":2' mcp.out && echo "MCP ok: $(grep -o '"name":"[a-z_]*"' mcp.out | wc -l) Werkzeuge"
+            sleep 30; } | "$BIN" --mcp > check/mcp.out
+          grep -q '"id":2' check/mcp.out && echo "MCP ok: $(grep -o '"name":"[a-z_]*"' check/mcp.out | wc -l) Werkzeuge"
+          DW_SHOT="$PWD/check/fenster.png" DW_SHOT_DELAY=8000 run 120 "$BIN"
+          test -s check/fenster.png && echo "Fenster ok"
+          run 600 "$BIN" --render examples/pitch.json --out check/render
+          ls check/render/*.pptx check/render/*.pdf check/render/*/01.png && echo "Export ok"
 
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Pruefung
+          path: check/
       - uses: actions/upload-artifact@v4
         with:
           name: Deckwerk-dmg
           path: dist/*.dmg
 
-      - name: Release „latest“ aktualisieren
+      - name: Release veröffentlichen
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest dist/*.dmg --title "Deckwerk für macOS (neuester Stand)" \
-            --notes "Automatisch gebaut aus ${GITHUB_SHA::7}. Installation: DMG öffnen, Deckwerk in „Programme“ ziehen, beim ersten Start Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“."
+          NOTES="Installation im Terminal: curl -fsSL https://raw.githubusercontent.com/Bavarianator/deckwerk-macos/main/install.sh | sh — oder: DMG öffnen, Deckwerk in „Programme“ ziehen. Beim ersten Start blockiert macOS die App, weil sie nicht notarisiert ist: Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“. Nur für Macs mit Apple Silicon (M1 und neuer)."
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            gh release create "${GITHUB_REF_NAME}" dist/*.dmg --title "Deckwerk ${GITHUB_REF_NAME} für macOS" --notes "$NOTES" --verify-tag
+          else
+            gh release delete latest --yes --cleanup-tag || true
+            gh release create latest dist/*.dmg --prerelease --title "Deckwerk für macOS (neuester Stand)" --notes "Automatisch gebaut aus ${GITHUB_SHA::7}. $NOTES"
+          fi

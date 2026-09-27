@@ -197,7 +197,7 @@ export interface ImgEl extends Base {
   crop?: Crop // expliziter Ausschnitt (freie Bilder), sonst cover + focus
 }
 // png: data URL rasterized at 4x, because PptxGenJS can't create SVG fallbacks in Node
-export interface IconEl extends Base { kind: 'icon'; svg: string; png?: string }
+export interface IconEl extends Base { kind: 'icon'; svg: string; png?: string; name?: string; qr?: string; color?: string } // name/qr: Herkunft, damit „Layout lösen“ echte Icon-/QR-Elemente erzeugt
 export interface ChartEl extends Base { kind: 'chart'; spec: ChartSpec }
 // Video/Audio: in der PPTX als eingebettetes Medium, im PDF/PNG als Vorschaubild
 export interface MediaEl extends Base { kind: 'media'; media: 'video' | 'audio'; src: string; poster?: string }

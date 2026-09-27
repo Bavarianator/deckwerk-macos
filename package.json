@@ -87,7 +87,10 @@
         }
       ],
       "identity": "-",
-      "hardenedRuntime": false
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Deckwerk nutzt das lokale Netzwerk, damit du die Präsentation mit dem Handy steuern kannst."
+      }
     },
     "dmg": {
       "title": "Deckwerk"

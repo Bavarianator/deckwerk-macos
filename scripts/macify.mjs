@@ -38,7 +38,9 @@ pkg.build = {
   mac: { icon: 'assets/icon-mac.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }],
     // Ad-hoc-Signatur ('-'): ohne Developer-ID. identity: null ließe das Bundle unversiegelt, Apple Silicon meldet dann „beschädigt“.
     // Hardened Runtime nur für Notarisierung nötig; ohne Team-ID würde ihre Library Validation onnxruntime blockieren können.
-    identity: '-', hardenedRuntime: false },
+    identity: '-', hardenedRuntime: false,
+    // Handy-Fernbedienung (remote.ts) lauscht im LAN; Text für die Rückfrage von macOS
+    extendInfo: { NSLocalNetworkUsageDescription: 'Deckwerk nutzt das lokale Netzwerk, damit du die Präsentation mit dem Handy steuern kannst.' } },
   dmg: { title: 'Deckwerk' },
 }
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
@@ -98,8 +100,8 @@ for (const f of readdirSync('examples').filter((f) => f.endsWith('.json')).map((
   const s = readFileSync(f, 'utf8'), t = s.replace(/asset:\/\/local\/[^"]*?\/examples\//g, '')
   if (t !== s) writeFileSync(f, t)
 }
-patch('src/main/index.ts', [
-  [`if ((k === 'src' || k === 'image') && typeof o[k] === 'string')`, `if ((k === 'src' || k === 'image' || k === 'poster') && typeof o[k] === 'string')`],
+patch('src/main/tools.ts', [
+  [`if ((k === 'src' || k === 'image') && typeof v === 'string'`, `if ((k === 'src' || k === 'image' || k === 'poster') && typeof v === 'string'`],
 ])
 // Präsentieren: F5 braucht auf Mac-Tastaturen fn, daher zusätzlich ⌥⌘P wie in Keynote (e.code, weil ⌥P als „π“ ankommt)
 patch('src/renderer/App.tsx', [

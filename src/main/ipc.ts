@@ -2,7 +2,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, screen, shell } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -10,10 +10,22 @@ import type { Deck } from '../shared/deck'
 import { DeckAgent, type AgentEvent, type Engine } from './agent'
 import { ClaudeAgent, findClaude } from './claude-agent'
 import { modelOf } from '../shared/models'
+import { setRemoteState, startRemote, stopRemote, type RemoteState } from './remote'
 import { SOURCE_EXT, SOURCE_MAX, sourceText } from './source-text'
-import { assetUrl, buildTools, STYLE_FILE } from './tools'
+import { assetUrl, buildTools, localizeDeck, STYLE_FILE } from './tools'
 
 const HOME = join(homedir(), 'Deckwerk')
+
+// Versionen (Canva „Versionsverlauf“): vor dem Überschreiben den alten Stand nach <deck>/versions/<zeit>.json,
+// höchstens alle 10 min, weil der Autosave alle paar Sekunden speichert. Zurück geht es über „Deck öffnen“.
+async function snapshot(file: string) {
+  if (!existsSync(file)) return
+  const dir = join(dirname(file), 'versions')
+  const last = (await readdir(dir).catch(() => [] as string[])).sort().at(-1)
+  if (last && Date.now() - (await stat(join(dir, last))).mtimeMs < 600_000) return
+  await mkdir(dir, { recursive: true })
+  await copyFile(file, join(dir, `${new Date().toLocaleString('sv').replace(' ', 'T').replace(/:/g, '-')}.json`))
+}
 
 export function registerIpc(win: BrowserWindow, engine: Engine): void {
   const keyFile = join(app.getPath('userData'), 'api-key.bin')
@@ -92,6 +104,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   ipcMain.handle('deck:save', async () => {
     if (!deck) throw new Error('Es gibt noch kein Deck zum Speichern.')
     path ??= join(await freeDir(deck.title), 'deck.json')
+    await snapshot(path)
     await writeFile(path, JSON.stringify(deck, null, 2))
     return path
   })
@@ -204,6 +217,12 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   })
 
   // Kopie als eigenes Deck unter ~/Deckwerk/<titel>/deck.json speichern (Formate: Quadrat, Story …); das offene Deck bleibt
+  // Vorlagen-Galerie (Canva „Vorlagen“): kuratierte Decks aus examples/, Bildpfade aufgelöst; geöffnet wird immer eine Kopie
+  ipcMain.handle('templates:list', () =>
+    ['foto', 'canva-look', 'quartal', 'strategie'].flatMap((name) => {
+      const file = join(app.getAppPath(), 'examples', `${name}.json`)
+      try { return [localizeDeck(readDeck(file), dirname(file))] } catch { return [] }
+    }))
   ipcMain.handle('deck:saveCopy', async (_, copy: Deck) => {
     const file = join(await freeDir(copy.title), 'deck.json')
     await writeFile(file, JSON.stringify(copy, null, 2))
@@ -232,6 +251,10 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   ipcMain.handle('present:deck', () => show)
   ipcMain.handle('present:cmd', (_, cmd: unknown) => { audience?.webContents.send('present:cmd', cmd) })
   ipcMain.handle('present:close', () => { audience?.close() })
+  // Handy als Fernbedienung: Befehle gehen an die Referentenansicht, die sie wie Tastendrücke behandelt
+  ipcMain.handle('remote:start', () => startRemote((c) => { if (!win.isDestroyed()) win.webContents.send('present:remote', c) }))
+  ipcMain.handle('remote:stop', () => stopRemote())
+  ipcMain.handle('remote:state', (_, s: RemoteState) => setRemoteState(s))
 
   // Einrichtung: KI-Zugang prüfen und Deckwerk als MCP-Server in Claude Code eintragen (User-Scope, alle Projekte).
   // Status aus ~/.claude.json lesen, weil `claude mcp get` den Server testweise startet und dafür zu lange braucht.
