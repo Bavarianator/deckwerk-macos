@@ -12,14 +12,14 @@ Das ist die macOS-Ausgabe (Apple Silicon) von [Deckwerk](https://github.com/Bava
 - **Ein Look für alles**: Themes, eigene Designs von der KI, Formate von 16:9 und 4:3 über Quadrat, 4:5 und Story (9:16) bis A4 und Link-Vorschau.
 - **Präsentieren**: Vollbild, Referentenansicht mit Notizen und Zeit, Laserpointer und Stift, Handy als Fernbedienung über das WLAN.
 - **Export**: PowerPoint (.pptx) mit echten, bearbeitbaren Objekten und Animationen, PDF, PNG je Folie, Handout (Markdown).
-- **Auch aus Claude Code**: Deckwerk ist zugleich ein MCP-Server. Claude Code baut und bearbeitet Decks dann direkt aus dem Terminal.
+- **Auch aus Claude Code, Codex und Vibe**: Deckwerk ist zugleich ein MCP-Server. Deine Agenten bauen und bearbeiten Decks dann direkt aus dem Terminal.
 
 ## Voraussetzungen
 
 - Mac mit **Apple Silicon** (M1 oder neuer). Intel-Macs werden nicht unterstützt.
 - macOS 12 oder neuer. Getestet wird bei jedem Build auf dem aktuellen macOS von GitHub.
-- Für die KI eins von beiden:
-  - ein **Claude-Code-Login** (`claude` installiert und angemeldet), dann ist kein API-Key nötig, oder
+- Für die KI eins davon:
+  - der Login eines **Agenten-CLIs**: Claude Code (`claude`), Codex (`codex`) oder Mistral Vibe (`vibe`), installiert und angemeldet. Dann ist kein API-Key nötig.
   - ein **Anthropic-API-Key** (`sk-ant-…`).
 - Optional: `brew install poppler` für den PDF-Import.
 
@@ -33,7 +33,7 @@ Terminal öffnen und einfügen:
 curl -fsSL https://raw.githubusercontent.com/Bavarianator/deckwerk-macos/main/install.sh | sh
 ```
 
-Das Skript lädt die DMG des neuesten Releases, kopiert Deckwerk nach `/Applications` und startet es. Derselbe Befehl aktualisiert später. Eine bestimmte Version: `… | sh -s v0.1.2`.
+Das Skript lädt die DMG des neuesten Releases, kopiert Deckwerk nach `/Applications`, trägt es als MCP-Server in Claude Code, Codex und Vibe ein (soweit installiert) und startet es. Derselbe Befehl aktualisiert später. Eine bestimmte Version: `… | sh -s v0.1.2`.
 
 Die App ist nicht von Apple notarisiert. Weil die Datei per `curl` kommt, trägt sie keine Quarantäne-Markierung, und macOS fragt nicht nach. Das umgeht die Gatekeeper-Prüfung bewusst. Führe den Befehl nur aus, wenn du diesem Repo vertraust. Das Skript ist kurz, lies es vorher: [install.sh](install.sh).
 
@@ -64,9 +64,9 @@ Selbst gebaut startet die App ohne Rückfrage. `npm run dist` baut stattdessen e
 
 Ein Einrichtungsassistent führt durch die Einrichtung (jederzeit überspringbar):
 
-1. **KI-Zugang**: Ist Claude Code installiert und angemeldet, nutzt Deckwerk dessen Login. Sonst den API-Key eintragen. Er liegt verschlüsselt über den macOS-Schlüsselbund auf deinem Mac.
-2. **Modell**: Opus 5.5 (Standard), Fable 5.1 (am stärksten, langsamer), Sonnet 5 (schneller) oder Haiku 4.5 (für kleine Änderungen). Umschalten geht später jederzeit im Chat.
-3. **Claude Code**: Auf Wunsch trägt Deckwerk sich als MCP-Server in Claude Code ein.
+1. **KI-Zugang**: Deckwerk findet Claude Code, Codex und Vibe von selbst. Der Chat läuft über den Login des ersten gefundenen, bei mehreren wählst du per Klick. Ohne CLI trägst du einen Anthropic-API-Key ein; er liegt verschlüsselt über den macOS-Schlüsselbund auf deinem Mac und hat Vorrang.
+2. **Modell**: Für Claude: Opus 5.5 (Standard), Fable 5.1 (am stärksten, langsamer), Sonnet 5 (schneller) oder Haiku 4.5 (für kleine Änderungen). Umschalten geht später jederzeit im Chat. Codex und Vibe nehmen das Modell aus ihrer eigenen Einstellung.
+3. **Agenten**: Ein Klick trägt Deckwerk als MCP-Server in Claude Code, Codex und Vibe ein, einzeln oder in alle gefundenen zugleich.
 4. **Testen**: Eine kurze Probeanfrage zeigt, dass alles läuft.
 
 Danach steht Deckwerk in Launchpad und Spotlight (⌘ Leertaste → „Deckwerk“). Ins Dock: Rechtsklick auf das Dock-Symbol → Optionen → Im Dock behalten.
@@ -104,17 +104,21 @@ Updates lassen alles davon unangetastet.
 ## Aktualisieren und Deinstallieren
 
 - **Aktualisieren**: den Installationsbefehl erneut ausführen, oder die neue DMG installieren. Selbst gebaut: `git pull && npm install && npm run install:mac`.
-- **Deinstallieren**: `/Applications/Deckwerk.app` in den Papierkorb legen. Einstellungen entfernen: `rm -rf ~/Library/Application\ Support/Deckwerk`. Den MCP-Eintrag: `claude mcp remove -s user deckwerk`. `~/Deckwerk` enthält deine Decks und bleibt, bis du es selbst löschst.
+- **Deinstallieren**: `/Applications/Deckwerk.app` in den Papierkorb legen. Einstellungen entfernen: `rm -rf ~/Library/Application\ Support/Deckwerk`. Die MCP-Einträge: `claude mcp remove -s user deckwerk`, `vibe mcp remove deckwerk`, `codex mcp remove deckwerk`. `~/Deckwerk` enthält deine Decks und bleibt, bis du es selbst löschst.
 
-## Claude Code (MCP-Server)
+## Claude Code, Codex und Vibe
 
-Claude Code bekommt dieselben Werkzeuge wie der Chat in der App (`create_deck`, `add_slides`, `render_slides`, `export_deck` …) plus `get_deck`, `save_deck` und `open_deck`. Der Einrichtungsassistent trägt den Server ein. Von Hand:
+**Deckwerk als Werkzeug deiner Agenten (MCP-Server):** Claude Code, Codex und Vibe bekommen dieselben Werkzeuge wie der Chat in der App (`create_deck`, `add_slides`, `render_slides`, `export_deck` …) plus `get_deck`, `save_deck` und `open_deck`. Der Installer und die Einrichtung tragen den Server ein. Von Hand:
 
 ```sh
 claude mcp add -s user deckwerk -- /Applications/Deckwerk.app/Contents/MacOS/Deckwerk --mcp
+vibe mcp add deckwerk --transport stdio --command /Applications/Deckwerk.app/Contents/MacOS/Deckwerk --arg=--mcp --startup-timeout-sec 90 --tool-timeout-sec 300
+codex mcp add deckwerk -- /Applications/Deckwerk.app/Contents/MacOS/Deckwerk --mcp   # danach in ~/.codex/config.toml unter [mcp_servers.deckwerk]: startup_timeout_sec = 90
 ```
 
 Decks landen unter `~/Deckwerk/<titel>/deck.json`. Die Umgebungsvariable `DECKWERK_HOME` wählt einen anderen Ordner.
+
+**Der Chat in der App über deinen Agenten:** Ohne API-Key läuft der Chat über `claude -p`, `codex exec` oder `vibe -p` mit deinem Login. Das CLI bekommt dabei nur die Deckwerk-Werkzeuge und die Web-Recherche, keine Shell und keine Dateiwerkzeuge. Ein präpariertes Quelldokument kann so keine Befehle auf deinem Mac ausführen. Der Chat über Codex ist noch nicht mit einem angemeldeten Codex getestet; Claude Code und Vibe sind es.
 
 ## Probleme und Lösungen
 
@@ -123,7 +127,8 @@ Decks landen unter `~/Deckwerk/<titel>/deck.json`. Die Umgebungsvariable `DECKWE
 | „Deckwerk kann nicht geöffnet werden, da Apple es nicht auf Schadsoftware überprüfen kann“ | Systemeinstellungen → Datenschutz & Sicherheit → „Trotzdem öffnen“. Oder `xattr -cr /Applications/Deckwerk.app`. Oder per curl installieren. |
 | „Deckwerk ist beschädigt“ | `xattr -cr /Applications/Deckwerk.app`, dann neu starten. |
 | macOS meldet „Schadsoftware“ und verschiebt die App in den Papierkorb | Fehlalarm von XProtect, bekannt bei nicht notarisierten Electron-Apps unter macOS 27. Dauerhaft hilft nur die Notarisierung (siehe unten). |
-| Chat antwortet nicht, Claude Code wird nicht gefunden | Deckwerk sucht `claude` in `/opt/homebrew/bin`, `/usr/local/bin` und `~/.local/bin`. Einmal `claude` im Terminal starten und anmelden, oder einen API-Key eintragen. |
+| Chat antwortet nicht, Claude Code, Codex oder Vibe wird nicht gefunden | Deckwerk sucht die CLIs in `/opt/homebrew/bin`, `/usr/local/bin` und `~/.local/bin`. Einmal im Terminal starten und anmelden (`claude`, `codex login`, `vibe --setup`), oder einen API-Key eintragen. |
+| „Codex ist nicht angemeldet“ | Im Terminal `codex login` ausführen. |
 | „PDF lesen braucht pdftotext“ | `brew install poppler` |
 | Handy-Fernbedienung verbindet nicht | Beim ersten Mal fragt macOS, ob Deckwerk eingehende Verbindungen annehmen darf: „Erlauben“. Handy und Mac müssen im selben WLAN sein. |
 | Freisteller braucht beim ersten Mal lange | Er lädt einmalig das Modell (rund 200 MB). Danach rechnet er lokal per CoreML auf Neural Engine und GPU. |

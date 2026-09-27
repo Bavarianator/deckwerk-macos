@@ -1,8 +1,9 @@
 // KI-Verlauf: Nachrichtentypen, Tool-Namen, Modellwahl und die Liste der Nachrichten (für die KI-Leiste).
-import { useEffect, useRef } from 'react'
+import { createContext, useContext, useEffect, useRef } from 'react'
 import { Select } from './kit'
 import { Check, CircleAlert, LoaderCircle, Sparkles } from 'lucide-react'
 import { MODELS } from '../../shared/models'
+import type { AppState } from '../../preload'
 
 export type Msg =
   | { kind: 'user' | 'ai' | 'error'; text: string }
@@ -17,8 +18,14 @@ export const TOOL: Record<string, string> = {
   find_images: 'Bilder suchen', export_deck: 'Exportieren', remember: 'Im Hausstil merken', web_search: 'Im Web suchen', web_fetch: 'Webseite lesen',
 }
 
+// Womit der Chat läuft (App setzt es aus state().chat); Codex und Vibe nehmen ihr eigenes Modell
+export const ChatBackend = createContext<AppState['chat']>(null)
+const OWN_MODEL: Record<string, string> = { codex: 'Codex', vibe: 'Vibe' }
+
 // Modellwahl; gilt ab der nächsten Nachricht, auch mitten im Gespräch
 export function ModelSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const chat = useContext(ChatBackend)
+  if (chat && OWN_MODEL[chat]) return <span className="model-select ghost" title={`Das Modell stellst du in ${OWN_MODEL[chat]} selbst ein.`}>{OWN_MODEL[chat]}</span>
   return (
     <Select className="model-select ghost" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Modell" title={MODELS.find((m) => m.id === value)?.hint}>
       {MODELS.map((m) => <option key={m.id} value={m.id} data-hint={m.hint}>{m.name}</option>)}

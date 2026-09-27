@@ -19,4 +19,23 @@ osascript -e 'quit app "Deckwerk"' 2>/dev/null || true
 rm -rf /Applications/Deckwerk.app
 ditto "$MNT/Deckwerk.app" /Applications/Deckwerk.app
 echo "Deckwerk ist installiert: /Applications/Deckwerk.app (Launchpad, Spotlight)."
+
+# Deckwerk als MCP-Server in die gefundenen Agenten-CLIs eintragen (die Einrichtung in der App kann das auch).
+# Vibe und Codex warten sonst nur 10 bzw. 60 s auf den Start und auf Werkzeuge; Rendern dauert länger.
+BIN=/Applications/Deckwerk.app/Contents/MacOS/Deckwerk
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
+if command -v claude >/dev/null; then
+  claude mcp remove -s user deckwerk >/dev/null 2>&1 || true
+  claude mcp add -s user deckwerk -- "$BIN" --mcp >/dev/null && echo "In Claude Code eingetragen."
+fi
+if command -v vibe >/dev/null; then
+  vibe mcp remove deckwerk >/dev/null 2>&1 || true
+  vibe mcp add deckwerk --transport stdio --command "$BIN" --arg=--mcp --startup-timeout-sec 90 --tool-timeout-sec 300 >/dev/null && echo "In Vibe eingetragen."
+fi
+if command -v codex >/dev/null; then
+  codex mcp remove deckwerk >/dev/null 2>&1 || true
+  codex mcp add deckwerk -- "$BIN" --mcp >/dev/null &&
+    perl -0pi -e 's/^\[mcp_servers\.deckwerk\]\n/$&startup_timeout_sec = 90\ntool_timeout_sec = 300\n/m' "${CODEX_HOME:-$HOME/.codex}/config.toml" &&
+    echo "In Codex eingetragen."
+fi
 open /Applications/Deckwerk.app

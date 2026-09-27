@@ -8,7 +8,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Deck } from '../shared/deck'
 import { DeckAgent, type AgentEvent, type Engine } from './agent'
-import { ClaudeAgent, findClaude } from './claude-agent'
+import { CLI_NAME, CLIS, CliAgent, findCli, type Cli } from './claude-agent'
 import { modelOf } from '../shared/models'
 import { setRemoteState, startRemote, stopRemote, type RemoteState } from './remote'
 import { SOURCE_EXT, SOURCE_MAX, sourceText } from './source-text'
@@ -46,8 +46,17 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   let deck: Deck | null = null
   let path: string | null = null // …/deck.json, null = noch nie gespeichert
   let dirty = false // Änderungen (UI oder KI) seit dem letzten Speichern
-  let agent: DeckAgent | ClaudeAgent | null = null
-  const claude = findClaude() // ohne API-Key läuft der Chat über Claude Code (Abo-Login)
+  let agent: DeckAgent | CliAgent | null = null
+  // Ohne API-Key läuft der Chat über ein Agenten-CLI mit dem Login des Nutzers: das in der Einrichtung gewählte, sonst das
+  // erste gefundene (Claude Code, Codex, Vibe)
+  const clis = Object.fromEntries(CLIS.map((c) => [c, findCli(c)])) as Record<Cli, string | null>
+  const cliFile = join(app.getPath('userData'), 'chat-cli')
+  const chatCli = (): Cli | null => {
+    let pick = ''
+    try { pick = readFileSync(cliFile, 'utf8').trim() } catch { /* nie gewählt */ }
+    return CLIS.find((c) => c === pick && clis[c]) ?? CLIS.find((c) => clis[c]) ?? null
+  }
+  const hasApiKey = () => existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY
 
   const emit = (e: AgentEvent) => {
     if (e.type === 'deck') { deck = e.deck; dirty = true }
@@ -61,7 +70,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     }
     return process.env.ANTHROPIC_API_KEY
   }
-  const state = () => ({ deck, path, hasKey: existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY || !!claude, setupDone: existsSync(setupFile) })
+  const state = () => ({ deck, path, hasKey: hasApiKey() || !!chatCli(), chat: hasApiKey() ? 'api' : chatCli(), setupDone: existsSync(setupFile) })
   // Auto-Speichern: der Renderer speichert 1,5 s nach jeder Änderung. Was in diesem Fenster noch offen ist, sichert
   // flush() synchron, bevor ein anderes Deck geladen oder das Fenster geschlossen wird.
   const flush = () => {
@@ -153,7 +162,8 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   ipcMain.handle('agent:send', async (_, text: string, model?: string) => {
     const key = apiKey()
     const opts = { engine, onEvent: emit, apiKey: key, deck: deck ?? undefined, outDir: outDir() }
-    agent ??= !key && claude ? new ClaudeAgent(claude, opts) : new DeckAgent(opts)
+    const cli = chatCli()
+    agent ??= !key && cli ? new CliAgent(cli, clis[cli]!, opts) : new DeckAgent(opts)
     agent.model = modelOf(model).id // unbekannt → Standardmodell
     await agent.send(text)
   })
@@ -289,27 +299,74 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   ipcMain.handle('remote:stop', () => stopRemote())
   ipcMain.handle('remote:state', (_, s: RemoteState) => setRemoteState(s))
 
-  // Einrichtung: KI-Zugang prüfen und Deckwerk als MCP-Server in Claude Code eintragen (User-Scope, alle Projekte).
-  // Status aus ~/.claude.json lesen, weil `claude mcp get` den Server testweise startet und dafür zu lange braucht.
-  // Start-Befehl für Claude Code: das Skript im Projekt (baut bei Bedarf neu), sonst Electron direkt mit dem App-Ordner
+  // Einrichtung: KI-Zugang prüfen und Deckwerk als MCP-Server in Claude Code, Codex und Vibe eintragen (für alle Projekte).
+  // Status aus deren Konfigurationsdateien lesen, weil z. B. `claude mcp get` den Server testweise startet und zu lange braucht.
+  // Start-Befehl für die Agenten: das Skript im Projekt (baut bei Bedarf neu), sonst Electron direkt mit dem App-Ordner
   // (z. B. wenn die App aus einer Kopie ohne scripts/ läuft); gepackte App (macOS): das Programm selbst, ohne app.asar-Pfad.
   // x11: printToPDF hängt unter Wayland.
   const script = join(app.getAppPath(), 'scripts', 'deckwerk.sh')
   const mcpCmd = app.isPackaged ? { command: process.execPath, args: ['--mcp'] }
     : existsSync(script) ? { command: script, args: ['--mcp'] }
-    : { command: process.execPath, args: [app.getAppPath(), ...(process.platform === 'linux' ? ['--ozone-platform=x11'] : []), '--mcp'] }
+    // Vibe und Codex starten den Server ohne DISPLAY: unter Linux headless statt x11 (x11 bräche dann ab)
+    : { command: process.execPath, args: [app.getAppPath(), ...(process.platform === 'linux' ? ['--ozone-platform=headless', '--disable-gpu'] : []), '--mcp'] }
   ipcMain.handle('setup:done', () => writeFile(setupFile, ''))
-  ipcMain.handle('setup:status', () => {
-    let mcp = false
-    try { mcp = JSON.parse(readFileSync(join(homedir(), '.claude.json'), 'utf8')).mcpServers?.deckwerk?.command === mcpCmd.command } catch { /* keine Datei = nicht eingerichtet */ }
-    return { claude: !!claude, key: existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY, mcp }
+  const config: Record<Cli, string> = {
+    claude: join(homedir(), '.claude.json'),
+    codex: join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml'),
+    vibe: join(process.env.VIBE_HOME ?? join(homedir(), '.vibe'), 'config.toml'),
+  }
+  // Eingetragen heißt: ein deckwerk-Eintrag mit genau unserem Start-Befehl (ein alter Pfad zählt nicht)
+  const registered = (cli: Cli): boolean => {
+    try {
+      const text = readFileSync(config[cli], 'utf8')
+      if (cli === 'claude') return JSON.parse(text).mcpServers?.deckwerk?.command === mcpCmd.command
+      return tomlSection(text, cli === 'codex' ? '[mcp_servers.deckwerk]\n' : '[[mcp_servers]]\nname = "deckwerk"\n').includes(`command = ${JSON.stringify(mcpCmd.command)}`)
+    } catch { return false } // keine Datei = nicht eingerichtet
+  }
+  const cliArg = (cli: unknown): Cli => {
+    if (!CLIS.includes(cli as Cli)) throw new Error(`Unbekanntes Werkzeug: ${String(cli)}`)
+    return cli as Cli
+  }
+  // Angemeldet? Nur Codex sagt das schnell (`codex login status`, Exit-Code); bei den anderen null = unbekannt
+  const loggedIn = (cli: Cli): Promise<boolean | null> => cli !== 'codex' || !clis.codex ? Promise.resolve(null)
+    : new Promise((ok) => execFile(clis.codex!, ['login', 'status'], { timeout: 10_000 }, (e) => ok(!e)))
+  ipcMain.handle('setup:status', async () => ({
+    key: hasApiKey(),
+    chat: chatCli(),
+    clis: await Promise.all(CLIS.map(async (c) => ({ id: c, name: CLI_NAME[c], found: !!clis[c], mcp: registered(c), login: await loggedIn(c) }))),
+  }))
+  // Chat ohne API-Key über dieses CLI führen
+  ipcMain.handle('setup:chat', async (_, c: unknown) => {
+    const cli = cliArg(c)
+    if (!clis[cli]) throw new Error(`${CLI_NAME[cli]} ist nicht installiert.`)
+    await writeFile(cliFile, cli)
+    agent?.abort()
+    agent = null // nächste Nachricht startet ein Gespräch mit dem neuen CLI
   })
-  ipcMain.handle('setup:mcp', async () => {
-    if (!claude) throw new Error('Claude Code ist nicht installiert.')
+  ipcMain.handle('setup:mcp', async (_, c: unknown = 'claude') => {
+    const cli = cliArg(c)
+    const bin = clis[cli]
+    if (!bin) throw new Error(`${CLI_NAME[cli]} ist nicht installiert.`)
     const run = (args: string[]) => new Promise<void>((ok, fail) =>
-      execFile(claude, args, { timeout: 60_000 }, (e, _out, err) => (e ? fail(new Error(err.trim() || e.message)) : ok())))
-    await run(['mcp', 'remove', '-s', 'user', 'deckwerk']).catch(() => {}) // alter Eintrag mit anderem Pfad
-    await run(['mcp', 'add', '-s', 'user', 'deckwerk', '--', mcpCmd.command, ...mcpCmd.args])
+      execFile(bin, args, { timeout: 60_000 }, (e, _out, err) => (e ? fail(new Error(err.trim() || e.message)) : ok())))
+    const { command, args } = mcpCmd
+    const [remove, add] = {
+      claude: [['mcp', 'remove', '-s', 'user', 'deckwerk'], ['mcp', 'add', '-s', 'user', 'deckwerk', '--', command, ...args]],
+      codex: [['mcp', 'remove', 'deckwerk'], ['mcp', 'add', 'deckwerk', '--', command, ...args]],
+      // --arg=--mcp: mit Leerzeichen hielte Vibe „--mcp“ für eine eigene Option
+      vibe: [['mcp', 'remove', 'deckwerk'], ['mcp', 'add', 'deckwerk', '--transport', 'stdio', '--command', command, ...args.map((a) => `--arg=${a}`),
+        '--startup-timeout-sec', '90', '--tool-timeout-sec', '300']],
+    }[cli]
+    await run(remove).catch(() => {}) // alter Eintrag mit anderem Pfad
+    await run(add)
+    // Electron braucht zum Starten länger als die 10 s, die Codex wartet, und Rendern länger als dessen Tool-Timeout;
+    // `codex mcp add` kann beides nicht setzen
+    if (cli === 'codex') {
+      const text = await readFile(config.codex, 'utf8')
+      const head = '[mcp_servers.deckwerk]\n'
+      if (!tomlSection(text, head).includes('startup_timeout_sec'))
+        await writeFile(config.codex, text.replace(head, `${head}startup_timeout_sec = 90\ntool_timeout_sec = 300\n`))
+    }
   })
   // Verbindung testen wie Claude Code: Server per stdio starten, initialize + tools/list, Anzahl der Werkzeuge zurück
   ipcMain.handle('setup:mcpTest', () => new Promise<number>((ok, fail) => {
@@ -346,4 +403,13 @@ function freeDir(title: string): string {
   for (let i = 2; existsSync(dir); i++) dir = join(HOME, `${slug}-${i}`)
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+// Inhalt eines TOML-Abschnitts ab seiner Kopfzeile bis zum nächsten Abschnitt (reicht, um unseren Eintrag zu erkennen)
+function tomlSection(text: string, head: string): string {
+  const i = text.indexOf(head)
+  if (i < 0) return ''
+  const rest = text.slice(i + head.length)
+  const next = rest.search(/^\[/m)
+  return next < 0 ? rest : rest.slice(0, next)
 }

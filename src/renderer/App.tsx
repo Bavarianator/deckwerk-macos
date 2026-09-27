@@ -10,7 +10,8 @@ import { THEMES } from '../shared/themes'
 import { modelOf } from '../shared/models'
 import type { Target } from './ui/AskBar'
 import { BuildView, type StoryItem } from './ui/BuildView'
-import type { Msg } from './ui/Chat'
+import { ChatBackend, type Msg } from './ui/Chat'
+import type { AppState } from '../preload'
 import { EditorScreen } from './ui/EditorScreen'
 import { KeyDialog } from './ui/KeyDialog'
 import { Logo } from './ui/Logo'
@@ -34,6 +35,7 @@ export default function App() {
   const [doc, setDoc] = useState<Doc>(fresh(null))
   const [path, setPath] = useState<string | null>(null)
   const [hasKey, setHasKey] = useState(true)
+  const [chat, setChat] = useState<AppState['chat']>(null) // API-Key, Claude Code, Codex oder Vibe
   const [askKey, setAskKey] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
@@ -67,6 +69,7 @@ export default function App() {
       setDoc(fresh(s.deck))
       setPath(s.path)
       setHasKey(s.hasKey)
+      setChat(s.chat)
       if (s.setupDone) setAskKey(!s.hasKey && !s.deck) // mit geöffnetem Deck erst beim ersten Senden fragen; beim ersten Start übernimmt die Einrichtung
       else setSetup(true)
     })
@@ -278,6 +281,7 @@ export default function App() {
   const building = busy && !!story?.length && (deck?.slides.length ?? 0) < story.length
 
   return (
+    <ChatBackend.Provider value={chat}>
     <div className="app">
       {home ? (
         <Start
@@ -357,16 +361,18 @@ export default function App() {
       {home && status?.error && <div className="toast material" role="alert">{status.text}</div>}
       {formats && deck && <FormatSheet deck={deck} index={index} onApply={(id) => commit((d) => resizeDeck(d, id))} onCopies={saveCopies} onClose={() => setFormats(false)} />}
       {look && deck && <LookSheet deck={deck} busy={busy} patchDeck={patchDeck} pickImage={api.pickImage} onAsk={(t) => send(t)} onClose={() => setLook(false)} />}
-      {setup && <SetupSheet model={model} onModel={pickModel} onKeySaved={() => setHasKey(true)} onClose={() => { setSetup(false); void api.setupDone() }} />}
+      {setup && <SetupSheet model={model} onModel={pickModel} onKeySaved={() => void api.state().then((s) => { setHasKey(s.hasKey); setChat(s.chat) })} onClose={() => { setSetup(false); void api.setupDone() }} />}
       {askKey && (
         <KeyDialog
           onClose={() => setAskKey(false)}
           onSave={async (key) => {
             await api.setApiKey(key).catch((e) => { throw new Error(errText(e)) })
             setHasKey(true)
+            setChat('api') // ein Key hat Vorrang vor den Agenten-CLIs
           }}
         />
       )}
     </div>
+    </ChatBackend.Provider>
   )
 }

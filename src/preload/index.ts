@@ -2,7 +2,12 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { CustomFont, Deck } from '../shared/deck'
 import type { AgentEvent } from '../main/agent'
 
-export interface AppState { deck: Deck | null; path: string | null; hasKey: boolean; setupDone: boolean }
+/** Agenten-CLI, über das der Chat ohne API-Key läuft und in das sich Deckwerk als MCP-Server einträgt */
+export type ChatCli = 'claude' | 'codex' | 'vibe'
+/** login: angemeldet (nur Codex prüfbar), null = unbekannt */
+export interface CliStatus { id: ChatCli; name: string; found: boolean; mcp: boolean; login: boolean | null }
+/** chat: womit der Chat gerade läuft (API-Key, eines der CLIs oder nichts) */
+export interface AppState { deck: Deck | null; path: string | null; hasKey: boolean; chat: 'api' | ChatCli | null; setupDone: boolean }
 /** Steuerbefehl vom Referenten an das Publikumsfenster */
 export type PresentCmd = { type: 'next' } | { type: 'go'; i: number } | { type: 'ink'; ink: Ink }
 /** Laserpunkt und Stiftstriche über der Folie, Koordinaten 0–1 (gleich auf jedem Bildschirm) */
@@ -87,12 +92,14 @@ const api = {
   readSource: (path?: string): Promise<{ name: string; text: string; cut: boolean } | null> => invoke('source:read', path),
   /** ~/Deckwerk/hausstil.md im Standard-Editor öffnen (legt sie bei Bedarf an) */
   openStyle: (): Promise<void> => invoke('style:open'),
-  /** Einrichtung: KI-Zugang und Deckwerk-MCP in Claude Code */
-  setupStatus: (): Promise<{ claude: boolean; key: boolean; mcp: boolean }> => invoke('setup:status'),
-  setupMcp: (): Promise<void> => invoke('setup:mcp'),
+  /** Einrichtung: KI-Zugang und Deckwerk-MCP in Claude Code, Codex und Vibe */
+  setupStatus: (): Promise<{ key: boolean; chat: ChatCli | null; clis: CliStatus[] }> => invoke('setup:status'),
+  setupMcp: (cli: ChatCli): Promise<void> => invoke('setup:mcp', cli),
+  /** Chat ohne API-Key über dieses CLI führen */
+  setupChat: (cli: ChatCli): Promise<void> => invoke('setup:chat', cli),
   /** Einrichtung abgeschlossen oder übersprungen: erscheint nicht mehr von selbst */
   setupDone: (): Promise<void> => invoke('setup:done'),
-  /** startet den MCP-Server wie Claude Code und liefert die Anzahl seiner Werkzeuge */
+  /** startet den MCP-Server wie die Agenten-CLIs und liefert die Anzahl seiner Werkzeuge */
   setupMcpTest: (): Promise<number> => invoke('setup:mcpTest'),
   /** absoluter Pfad einer per Drag & Drop abgelegten Datei */
   pathOf: (file: File): string => webUtils.getPathForFile(file),
