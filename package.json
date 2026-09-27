@@ -20,6 +20,7 @@
     "spike:fonts": "esbuild scripts/spike-embed-fonts.ts --bundle --packages=external --platform=node --format=esm --outfile=out/spike-embed-fonts.mjs --log-level=warning && node out/spike-embed-fonts.mjs",
     "open": "node scripts/open.mjs",
     "fonts:fetch": "esbuild scripts/fetch-fonts.ts --bundle --packages=external --platform=node --format=esm --outfile=out/fetch-fonts.mjs --log-level=warning && node out/fetch-fonts.mjs",
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never",
     "dist": "electron-vite build && electron-builder --mac",
     "sync:linux": "sh scripts/sync-linux.sh",
     "install:mac": "electron-vite build && electron-builder --mac --dir --arm64 && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo \"Deckwerk liegt in /Applications (Launchpad, Spotlight)\""
@@ -50,10 +51,10 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.4.5",
+    "electron-builder": "^26.0.0",
     "electron-vite": "^5.0.0",
     "typescript": "^7.0.2",
-    "vite": "^7.3.6",
-    "electron-builder": "^26.0.0"
+    "vite": "^7.3.6"
   },
   "private": true,
   "author": "Deckwerk",
