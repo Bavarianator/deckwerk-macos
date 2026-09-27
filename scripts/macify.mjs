@@ -10,7 +10,7 @@ for (const k of Object.keys(pkg.scripts)) pkg.scripts[k] = pkg.scripts[k].replac
 pkg.author = 'Deckwerk'
 pkg.license = 'AGPL-3.0-only'
 // Eigene Versionsnummer der macOS-Ausgabe (die Linux-Version bleibt bei ihrer); Tag v<version> baut das Release
-pkg.version = '0.1.2'
+pkg.version = '0.1.3'
 pkg.scripts.dist = 'electron-vite build && electron-builder --mac'
 pkg.scripts['sync:linux'] = 'sh scripts/sync-linux.sh'
 // Ein Schritt statt DMG: App bauen und direkt nach /Applications legen (erscheint in Launchpad und Spotlight)
