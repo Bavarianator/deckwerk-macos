@@ -41,7 +41,8 @@ pkg.build = {
     identity: '-', hardenedRuntime: false,
     // Handy-Fernbedienung (remote.ts) lauscht im LAN; Text für die Rückfrage von macOS
     extendInfo: { NSLocalNetworkUsageDescription: 'Deckwerk nutzt das lokale Netzwerk, damit du die Präsentation mit dem Handy steuern kannst.' } },
-  dmg: { title: 'Deckwerk' },
+  // Fester Name ohne Version: install.sh lädt über …/releases/latest/download/Deckwerk-arm64.dmg, ohne GitHub-API (Rate-Limit)
+  dmg: { title: 'Deckwerk', artifactName: 'Deckwerk-${arch}.${ext}' },
 }
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
 
