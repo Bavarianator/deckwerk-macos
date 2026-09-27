@@ -21,7 +21,7 @@ pkg.author = 'Deckwerk'
 pkg.scripts.dist = 'electron-vite build && electron-builder --mac'
 pkg.scripts['sync:linux'] = 'sh scripts/sync-linux.sh'
 // Ein Schritt statt DMG: App bauen und direkt nach /Applications legen (erscheint in Launchpad und Spotlight)
-pkg.scripts['install:mac'] = 'electron-vite build && electron-builder --mac --dir && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && echo "Deckwerk liegt in /Applications (Launchpad, Spotlight)"'
+pkg.scripts['install:mac'] = 'electron-vite build && electron-builder --mac --dir && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo "Deckwerk liegt in /Applications (Launchpad, Spotlight)"'
 pkg.devDependencies['electron-builder'] = '^26.0.0'
 pkg.build = {
   appId: 'de.deckwerk.app', productName: 'Deckwerk', copyright: 'Deckwerk',
