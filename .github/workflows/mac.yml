@@ -82,3 +82,10 @@ jobs:
             gh release delete latest --yes --cleanup-tag || true
             gh release create latest dist/*.dmg --prerelease --title "Deckwerk für macOS (neuester Stand)" --notes "Automatisch gebaut aus ${GITHUB_SHA::7}. $NOTES"
           fi
+
+      # Den curl-Installer gegen das eben veröffentlichte Release laufen lassen, wie ein Nutzer es tut
+      - name: Installer testen
+        run: |
+          sh install.sh "${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}"
+          codesign --verify --deep --strict /Applications/Deckwerk.app
+          ! xattr -p com.apple.quarantine /Applications/Deckwerk.app 2>/dev/null && echo "Installiert, ohne Quarantäne"
