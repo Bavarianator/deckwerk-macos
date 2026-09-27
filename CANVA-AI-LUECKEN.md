@@ -44,22 +44,28 @@ Stand: 27.09.2026. Ergänzt `CANVA-VERGLEICH.md` (dort: Design, Layouts, Effekte
 | L4 | **Handout als Markdown** (Titel, Inhalte, Notizen) – Magic Switch „Deck → Doc“ | mittel | S | bauen |
 | L5 | **Tonfall der Marke** (Brand Voice): Freitext im Brand Kit, geht in den Prompt | mittel | S | bauen |
 | L6 | **Gedächtnis** über Decks hinweg (Vorlieben, Korrekturen des Nutzers) | mittel | M | später: Datei im userData, die der Agent liest/schreibt |
-| L7 | Web-Recherche im App-Chat | mittel | M | im Claude-Code-Modus schon vorhanden (WebSearch); für den API-Modus später |
+| L7 | Web-Recherche im App-Chat | mittel | S | bauen |
 | L8 | Magic Insights: Kernaussage aus Diagrammdaten vorschlagen | mittel | S | vorhanden über Chart-Editor-Prüfung; kein eigenes Werkzeug nötig |
-| L9 | PPTX/PDF importieren und bearbeitbar machen (Magic Layers für Folien) | hoch, aber teuer | L | offen, eigene Planung |
+| L9 | PPTX/PDF importieren und bearbeitbar machen (Magic Layers für Folien) | hoch | S (schlank) / L (pixelgenau) | schlank bauen: Text je Folie, KI baut nach |
 | L10 | KI-Bilder, Style Match, Image to Video, Magic Edit/Eraser/Expand | niedrig für Business-Decks | M–L | weggelassen, braucht Bildmodell + Key (siehe CANVA-VERGLEICH 3.5) |
 | L11 | Connectors (Slack, Mail, Drive), Scheduling | niedrig für ein lokales Werkzeug | L | weggelassen |
 | L12 | Canva Code / HTML-Import | niedrig | L | weggelassen |
 
-## 4. Umsetzungsstand
+## 4. Umsetzungsstand (27.09.2026)
 
 | # | Stand | Wo |
 |---|---|---|
-| L1 | offen | |
-| L2 | offen | |
-| L3 | offen | |
-| L4 | offen | |
-| L5 | offen | |
+| L1 | fertig: Büroklammer „Datei“ auf dem Startbildschirm oder Datei aufs Feld ziehen; TXT, MD, CSV, JSON, DOCX, PPTX (Text je Folie), PDF (über `pdftotext`). Bis 60.000 Zeichen gehen als Kontext nur an die KI, der Chat zeigt Wunsch und Dateiname. Test: `scripts/check-source.ts` | `src/main/source-text.ts`, `ipc.ts` source:read, `Start.tsx` |
+| L2 | fertig: Sprechzeit je Folie und fürs ganze Deck (130 Wörter/min) am Notizfeld, „Plan ≈ …“ in der Referentenansicht | `shared/handout.ts` speakSec, `EditorScreen.tsx`, `PresentScreen.tsx` |
+| L3 | fertig: Knopf „Schreiben lassen“ / „Überarbeiten“ am Notizfeld schickt den Auftrag für die aktuelle Folie an die KI | `EditorScreen.tsx` |
+| L4 | fertig: Exportieren → „Handout (.md)“, auch `export_deck({ format: 'md' })`. Test: `scripts/check-handout.ts` | `shared/handout.ts`, `engine.ts` |
+| L5 + L6 | fertig als **Hausstil**: `~/Deckwerk/hausstil.md` gilt für jedes Deck und steht im Systemprompt (App-Chat, Claude-Code-Chat, MCP). Die KI ergänzt ihn per Tool `remember` („merk dir …“ oder zweimal dieselbe Korrektur). Look-Panel → Hausstil „Bearbeiten …“ öffnet die Datei. Ein eigenes Brand-Voice-Feld war unnötig, pro Deck gibt es schon `brief.tone` | `tools.ts` remember/STYLE_FILE, `agent.ts` buildSystemPrompt, `LookSheet.tsx` |
+| L7 | fertig: App-Chat mit API-Key hat die Server-Tools `web_search` und `web_fetch` (Haiku nur Suche), der Chat über Claude Code hat `WebSearch`/`WebFetch` (vorher per `--tools ''` gesperrt). Mit `claude -p` getestet; den API-Weg nicht, weil kein Key hinterlegt ist | `agent.ts`, `claude-agent.ts` |
+| L1 (Editor) | fertig: Büroklammer und Drop auch in der KI-Leiste, gemeinsamer Hook `useSource` | `Start.tsx`, `AskBar.tsx` |
+| L9 | schlank fertig: PowerPoint anhängen ohne weiteren Text → „Übernimm diese PowerPoint als Deck“; die KI baut Folie für Folie in Deckwerk-Layouts nach. Kein pixelgenauer Import von Positionen, Bildern und Formen | `Start.tsx` |
+| L8, L10–L12 | vorhanden bzw. weggelassen wie oben | – |
+
+Nicht geprüft: die Anhang-Pill nach echtem Drag & Drop (per CDP nicht auslösbar); IPC und Extraktion sind getestet. Die Web-Recherche erscheint im Chat nicht als eigener Status-Chip.
 
 ## Quellen
 

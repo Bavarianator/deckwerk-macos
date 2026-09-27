@@ -165,6 +165,11 @@ export function LookSheet({ deck, busy, patchDeck, pickImage, onAsk, onClose }: 
               {deck.theme.customFont ? deck.theme.customFont.family : 'Eigene Schrift …'}
             </button>
           </div>
+          <div className="look-group">
+            <b>Hausstil</b>
+            <button className="pill" title="Vorlieben für alle Decks (Tonfall, Anrede, No-Gos). Die KI ergänzt sie, wenn du „merk dir …“ sagst."
+              onClick={() => void window.api.openStyle()}>Bearbeiten …</button>
+          </div>
         </div>
       </section>
     </div>

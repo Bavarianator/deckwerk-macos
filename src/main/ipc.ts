@@ -10,12 +10,15 @@ import type { Deck } from '../shared/deck'
 import { DeckAgent, type AgentEvent, type Engine } from './agent'
 import { ClaudeAgent, findClaude } from './claude-agent'
 import { modelOf } from '../shared/models'
-import { assetUrl, buildTools } from './tools'
+import { SOURCE_EXT, SOURCE_MAX, sourceText } from './source-text'
+import { assetUrl, buildTools, STYLE_FILE } from './tools'
 
 const HOME = join(homedir(), 'Deckwerk')
 
 export function registerIpc(win: BrowserWindow, engine: Engine): void {
   const keyFile = join(app.getPath('userData'), 'api-key.bin')
+  // Einrichtung erledigt: Datei statt localStorage, das bei hartem Beenden oder mehreren Instanzen verloren geht
+  const setupFile = join(app.getPath('userData'), 'setup-done')
   let deck: Deck | null = null
   let path: string | null = null // …/deck.json, null = noch nie gespeichert
   let agent: DeckAgent | ClaudeAgent | null = null
@@ -33,7 +36,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     }
     return process.env.ANTHROPIC_API_KEY
   }
-  const state = () => ({ deck, path, hasKey: existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY || !!claude })
+  const state = () => ({ deck, path, hasKey: existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY || !!claude, setupDone: existsSync(setupFile) })
   const reset = (d: Deck | null, p: string | null) => {
     agent?.abort()
     agent = null // neues Deck = neues Gespräch
@@ -93,7 +96,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     return path
   })
 
-  ipcMain.handle('deck:export', async (_, format: 'pptx' | 'pdf' | 'png') => {
+  ipcMain.handle('deck:export', async (_, format: 'pptx' | 'pdf' | 'png' | 'md') => {
     if (!deck) throw new Error('Es gibt noch kein Deck zum Exportieren.')
     await mkdir(outDir(), { recursive: true })
     const [file] = await engine.exportDeck(deck, format, outDir())
@@ -142,6 +145,23 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: kind === 'video' ? 'Videos' : 'Audio', extensions }] })
     const file = r.filePaths[0]
     return r.canceled || !file ? null : assetUrl(file)
+  })
+  // Quellmaterial für ein neues Deck; ohne Pfad per Dialog. null = abgebrochen
+  ipcMain.handle('source:read', async (_, path?: string) => {
+    if (!path) {
+      const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Dokumente', extensions: SOURCE_EXT }] })
+      if (r.canceled || !r.filePaths[0]) return null
+      path = r.filePaths[0]
+    }
+    const text = (await sourceText(path)).trim()
+    if (!text) throw new Error('In der Datei steht kein lesbarer Text (gescanntes PDF?).')
+    return { name: path.split('/').pop()!, text: text.slice(0, SOURCE_MAX), cut: text.length > SOURCE_MAX }
+  })
+  ipcMain.handle('style:open', async () => {
+    await mkdir(HOME, { recursive: true })
+    if (!existsSync(STYLE_FILE)) await writeFile(STYLE_FILE, '# Hausstil\n\n<!-- Gilt für jedes Deck. Eine Vorliebe pro Zeile; die KI ergänzt hier, wenn du „merk dir …“ sagst. -->\n')
+    const err = await shell.openPath(STYLE_FILE)
+    if (err) throw new Error(err)
   })
   // eigene Schrift: 1–2 TTF (Regular, Bold am Dateinamen erkannt); Familienname aus der name-Tabelle, damit PowerPoint sie zuordnet
   ipcMain.handle('font:pick', async () => {
@@ -219,6 +239,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   // (z. B. wenn die App aus einer Kopie ohne scripts/ läuft). x11: printToPDF hängt unter Wayland.
   const script = join(app.getAppPath(), 'scripts', 'deckwerk.sh')
   const mcpCmd = existsSync(script) ? { command: script, args: ['--mcp'] } : app.isPackaged ? { command: process.execPath, args: ['--mcp'] } : { command: process.execPath, args: [app.getAppPath(), '--mcp'] }
+  ipcMain.handle('setup:done', () => writeFile(setupFile, ''))
   ipcMain.handle('setup:status', () => {
     let mcp = false
     try { mcp = JSON.parse(readFileSync(join(homedir(), '.claude.json'), 'utf8')).mcpServers?.deckwerk?.command === mcpCmd.command } catch { /* keine Datei = nicht eingerichtet */ }
