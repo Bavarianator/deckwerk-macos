@@ -12,13 +12,13 @@ jobs:
   dmg:
     runs-on: macos-latest # Apple Silicon (arm64)
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: lts/*
           cache: npm
       - run: npm install --no-audit --no-fund
-      - run: npm run dist
+      - run: npm run dist -- --publish never # veröffentlicht wird unten per gh release
 
       # Prüfen, ob das fertige Paket läuft: Signatur, natives onnxruntime (Freisteller), MCP-Server (lädt ajv aus node_modules)
       - name: Paket prüfen
