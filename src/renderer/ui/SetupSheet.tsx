@@ -1,12 +1,13 @@
 // Einrichtung beim ersten Start (und später über das Zahnrad): Willkommen → KI-Zugang → Modell → Agenten (Claude Code, Codex, Vibe) →
 // Verbindung testen → Fertig. Jeder Schritt zeigt, was schon erledigt ist; nichts davon ist Pflicht.
-import { useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { ArrowLeft, Check, Copy, KeyRound, LayoutGrid, LoaderCircle, Palette, Sparkles, Terminal, Wand2 } from 'lucide-react'
-import { MODELS } from '../../shared/models'
+import { DEFAULT_MODEL, MODELS, routeOf } from '../../shared/models'
+import { ChatChoices } from './Chat'
 import { Logo } from './Logo'
 import type { ChatCli, CliStatus } from '../../preload'
 
-type Status = { key: boolean; chat: ChatCli | null; clis: CliStatus[] }
+type Status = { key: boolean; clis: CliStatus[] }
 const STEPS = ['Willkommen', 'KI-Zugang', 'Modell', 'Agenten', 'Testen', 'Fertig']
 const INSTALL: Record<ChatCli, string> = {
   claude: 'npm install -g @anthropic-ai/claude-code',
@@ -44,10 +45,19 @@ export function SetupSheet({ model, onModel, onKeySaved, onClose }: Props) {
   const install = (cli: ChatCli) => run(cli, async () => { await window.api.setupMcp(cli); await load() })
   const open = s?.clis.filter((c) => c.found && !c.mcp) ?? [] // gefunden, aber Deckwerk noch nicht eingetragen
   const installAll = () => run('all', async () => { for (const c of open) await window.api.setupMcp(c.id); await load() })
-  const useCli = (cli: ChatCli) => run('', async () => { await window.api.setupChat(cli); onKeySaved(); await load() })
+  // Chat-Weg = Gruppe im Modell-Dropdown: Klick auf ein CLI wählt dessen erstes Modell (Claude: das bisherige Claude-Modell)
+  const choices = useContext(ChatChoices)
+  const kind = routeOf(model)?.cli ?? 'claude'
+  const useCli = (cli: ChatCli) => onModel(cli === 'claude' ? (kind === 'claude' ? model : DEFAULT_MODEL) : choices?.[cli][0]?.id ?? `${cli}:`)
+  const groups = [
+    ...(!choices || choices.claude ? [{ label: 'Claude', items: MODELS.map((m) => ({ id: m.id as string, name: m.name as string, hint: m.hint as string | undefined })) }] : []),
+    ...(choices?.vibe.length ? [{ label: 'Vibe (Mistral)', items: choices.vibe }] : []),
+    ...(choices?.codex.length ? [{ label: 'Codex (OpenAI)', items: choices.codex }] : []),
+  ]
   const test = () => run('test', async () => { setTools(null); setTools(await window.api.setupMcpTest()) })
   const copy = (i: number) => { void navigator.clipboard.writeText(PROMPTS[i]); setCopied(i) }
   const next = () => setStep((x) => Math.min(STEPS.length - 1, x + 1))
+  const on = (cli: ChatCli) => kind === cli && !(cli === 'claude' && s?.key) // Claude mit Key läuft über die API
   const mcp = s?.clis.filter((c) => c.mcp).map((c) => c.name).join(', ') // wo Deckwerk eingetragen ist
   const ok = <span className="setup-ok" aria-label="erledigt"><Check size={14} strokeWidth={3} /></span>
   const spin = <LoaderCircle size={14} className="spin" />
@@ -69,12 +79,12 @@ export function SetupSheet({ model, onModel, onKeySaved, onClose }: Props) {
       <p className="setup-sub">Deckwerk arbeitet mit dem Login deines Agenten-CLIs oder mit einem Anthropic-API-Key. Ein Zugang reicht.</p>
       <div className="setup-choice" role="radiogroup" aria-label="Chat über">
         {!s ? <p>{spin} Wird geprüft …</p> : s.clis.map((c) => (
-          <button key={c.id} role="radio" aria-checked={!s.key && s.chat === c.id} disabled={!c.found}
-            className={`setup-opt ${!s.key && s.chat === c.id ? 'on' : ''}`} onClick={() => useCli(c.id)}>
-            {!s.key && s.chat === c.id ? ok : <span className="setup-num" />}
-            <span><b>{c.name}-Login</b>{!c.found ? 'Nicht installiert (siehe Schritt 4).'
+          <button key={c.id} role="radio" aria-checked={on(c.id)} disabled={!c.found}
+            className={`setup-opt ${on(c.id) ? 'on' : ''}`} onClick={() => useCli(c.id)}>
+            {on(c.id) ? ok : <span className="setup-num" />}
+            <span><b>{c.name.replace(/ /g, '-')}-Login</b><span>{!c.found ? 'Nicht installiert (siehe Schritt 4).'
               : c.login === false ? <>Gefunden, aber nicht angemeldet. Einmal im Terminal <code>{LOGIN[c.id]}</code> ausführen.</>
-              : !s.key && s.chat === c.id ? 'Der Chat läuft über dein Abo, kein API-Key nötig.' : 'Gefunden. Anklicken, um den Chat darüber zu führen.'}</span>
+              : on(c.id) ? 'Der Chat läuft über dein Abo, kein API-Key nötig.' : 'Gefunden. Anklicken, um den Chat darüber zu führen.'}</span></span>
           </button>
         ))}
         <div className={`setup-opt ${s?.key ? 'on' : ''}`}>
@@ -95,15 +105,18 @@ export function SetupSheet({ model, onModel, onKeySaved, onClose }: Props) {
     </>,
     <>
       <h1 id="setup-title">Welches Modell?</h1>
-      <p className="setup-sub">Gilt für den Chat über Claude (API-Key oder Claude Code). Du kannst es an der KI-Leiste jederzeit wechseln. Codex und Vibe nehmen das Modell aus ihrer eigenen Einstellung.</p>
-      <div className="setup-choice" role="radiogroup" aria-label="Modell">
-        {MODELS.map((m) => (
-          <button key={m.id} role="radio" aria-checked={model === m.id} className={`setup-opt ${model === m.id ? 'on' : ''}`} onClick={() => onModel(m.id)}>
-            {model === m.id ? ok : <span className="setup-num" />}
-            <span><b>{m.name}</b>{m.hint}</span>
-          </button>
-        ))}
-      </div>
+      <p className="setup-sub">Das Modell bestimmt auch, ob der Chat über Claude, Vibe oder Codex läuft. Du kannst es an der KI-Leiste jederzeit wechseln.</p>
+      {groups.map((g) => (
+        <div key={g.label} className="setup-choice" role="radiogroup" aria-label={g.label}>
+          <p className="setup-group">{g.label}</p>
+          {g.items.map((m) => (
+            <button key={m.id} role="radio" aria-checked={model === m.id} className={`setup-opt ${model === m.id ? 'on' : ''}`} onClick={() => onModel(m.id)}>
+              {model === m.id ? ok : <span className="setup-num" />}
+              <span><b>{m.name}</b>{m.hint}</span>
+            </button>
+          ))}
+        </div>
+      ))}
     </>,
     <>
       <h1 id="setup-title">Deckwerk in deinen Agenten</h1>

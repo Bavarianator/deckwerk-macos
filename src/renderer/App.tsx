@@ -7,11 +7,10 @@ import { FORMATS, type Deck, type FormatId, type Item, type Slide } from '../sha
 import { newId, resizeDeck } from '../shared/items'
 import { LAYOUTS, type LayoutId } from '../shared/layouts'
 import { THEMES } from '../shared/themes'
-import { modelOf } from '../shared/models'
+import { DEFAULT_MODEL, pickAvailable, type ChatModels } from '../shared/models'
 import type { Target } from './ui/AskBar'
 import { BuildView, type StoryItem } from './ui/BuildView'
-import { ChatBackend, type Msg } from './ui/Chat'
-import type { AppState } from '../preload'
+import { ChatChoices, type Msg } from './ui/Chat'
 import { EditorScreen } from './ui/EditorScreen'
 import { KeyDialog } from './ui/KeyDialog'
 import { Logo } from './ui/Logo'
@@ -35,7 +34,7 @@ export default function App() {
   const [doc, setDoc] = useState<Doc>(fresh(null))
   const [path, setPath] = useState<string | null>(null)
   const [hasKey, setHasKey] = useState(true)
-  const [chat, setChat] = useState<AppState['chat']>(null) // API-Key, Claude Code, Codex oder Vibe
+  const [choices, setChoices] = useState<ChatModels | null>(null) // Modell-Dropdown: Claude, Vibe, Codex
   const [askKey, setAskKey] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [busy, setBusy] = useState(false)
@@ -55,11 +54,16 @@ export default function App() {
   // automatisch sichern wie in Apple-Apps: jede Änderung nach kurzer Pause nach ~/Deckwerk/<titel>/deck.json
   const [saved, setSaved] = useState(true)
   const skipSave = useRef(true) // frisch geladenes Deck nicht gleich wieder schreiben // Stand vor der letzten KI-Runde, für „Rückgängig“ in der Blase
-  const [model, setModel] = useState<string>(() => { try { return modelOf(localStorage.getItem('dw.model')).id } catch { return modelOf(null).id } })
+  // Modell und damit Chat-Weg; „vibe:…“/„codex:…“ unverändert laden, gültig macht es pickAvailable, sobald die Liste da ist
+  const [model, setModel] = useState<string>(() => { try { return localStorage.getItem('dw.model') || DEFAULT_MODEL } catch { return DEFAULT_MODEL } })
   const pickModel = useCallback((id: string) => {
     setModel(id)
     try { localStorage.setItem('dw.model', id) } catch { /* ohne Speicher gilt die Wahl nur bis zum Neustart */ }
   }, [])
+  const loadChoices = useCallback(() => api.chatModels().then(setChoices, () => {}), [])
+  useEffect(() => { void loadChoices() }, [])
+  // Gewähltes Modell hier nicht verfügbar (z. B. Vibe deinstalliert, nur Vibe da): automatisch das erste verfügbare
+  useEffect(() => { if (choices && pickAvailable(model, choices) !== model) pickModel(pickAvailable(model, choices)) }, [choices])
   const deck = doc.deck
   const index = deck ? Math.max(0, Math.min(sel, deck.slides.length - 1)) : 0
 
@@ -69,7 +73,6 @@ export default function App() {
       setDoc(fresh(s.deck))
       setPath(s.path)
       setHasKey(s.hasKey)
-      setChat(s.chat)
       if (s.setupDone) setAskKey(!s.hasKey && !s.deck) // mit geöffnetem Deck erst beim ersten Senden fragen; beim ersten Start übernimmt die Einrichtung
       else setSetup(true)
     })
@@ -281,7 +284,7 @@ export default function App() {
   const building = busy && !!story?.length && (deck?.slides.length ?? 0) < story.length
 
   return (
-    <ChatBackend.Provider value={chat}>
+    <ChatChoices.Provider value={choices}>
     <div className="app">
       {home ? (
         <Start
@@ -361,18 +364,18 @@ export default function App() {
       {home && status?.error && <div className="toast material" role="alert">{status.text}</div>}
       {formats && deck && <FormatSheet deck={deck} index={index} onApply={(id) => commit((d) => resizeDeck(d, id))} onCopies={saveCopies} onClose={() => setFormats(false)} />}
       {look && deck && <LookSheet deck={deck} busy={busy} patchDeck={patchDeck} pickImage={api.pickImage} onAsk={(t) => send(t)} onClose={() => setLook(false)} />}
-      {setup && <SetupSheet model={model} onModel={pickModel} onKeySaved={() => void api.state().then((s) => { setHasKey(s.hasKey); setChat(s.chat) })} onClose={() => { setSetup(false); void api.setupDone() }} />}
+      {setup && <SetupSheet model={model} onModel={pickModel} onKeySaved={() => { void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }} onClose={() => { setSetup(false); void api.setupDone(); void loadChoices() }} />}
       {askKey && (
         <KeyDialog
           onClose={() => setAskKey(false)}
           onSave={async (key) => {
             await api.setApiKey(key).catch((e) => { throw new Error(errText(e)) })
             setHasKey(true)
-            setChat('api') // ein Key hat Vorrang vor den Agenten-CLIs
+            void loadChoices() // mit Key steht Claude auch ohne Claude Code zur Wahl
           }}
         />
       )}
     </div>
-    </ChatBackend.Provider>
+    </ChatChoices.Provider>
   )
 }

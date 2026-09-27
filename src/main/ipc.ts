@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url'
 import type { Deck } from '../shared/deck'
 import { DeckAgent, type AgentEvent, type Engine } from './agent'
 import { CLI_NAME, CLIS, CliAgent, findCli, type Cli } from './claude-agent'
-import { modelOf } from '../shared/models'
+import { modelOf, routeOf, type ChatModels } from '../shared/models'
 import { setRemoteState, startRemote, stopRemote, type RemoteState } from './remote'
 import { SOURCE_EXT, SOURCE_MAX, sourceText } from './source-text'
 import { assetUrl, buildTools, localizeDeck, STYLE_FILE } from './tools'
@@ -47,15 +47,11 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   let path: string | null = null // …/deck.json, null = noch nie gespeichert
   let dirty = false // Änderungen (UI oder KI) seit dem letzten Speichern
   let agent: DeckAgent | CliAgent | null = null
-  // Ohne API-Key läuft der Chat über ein Agenten-CLI mit dem Login des Nutzers: das in der Einrichtung gewählte, sonst das
-  // erste gefundene (Claude Code, Codex, Vibe)
-  const clis = Object.fromEntries(CLIS.map((c) => [c, findCli(c)])) as Record<Cli, string | null>
-  const cliFile = join(app.getPath('userData'), 'chat-cli')
-  const chatCli = (): Cli | null => {
-    let pick = ''
-    try { pick = readFileSync(cliFile, 'utf8').trim() } catch { /* nie gewählt */ }
-    return CLIS.find((c) => c === pick && clis[c]) ?? CLIS.find((c) => clis[c]) ?? null
-  }
+  let agentKind: 'api' | Cli | null = null // wechselt die Modellwahl den Weg, beginnt ein neues Gespräch
+  // Agenten-CLIs mit dem Login des Nutzers (Claude Code, Codex, Vibe). Welches der Chat nutzt, entscheidet das Modell-Dropdown.
+  const clis = {} as Record<Cli, string | null>
+  const detect = () => { for (const c of CLIS) clis[c] = findCli(c) } // erneut in Einrichtung und Modell-Liste: frisch Installiertes zählt sofort
+  detect()
   const hasApiKey = () => existsSync(keyFile) || !!process.env.ANTHROPIC_API_KEY
 
   const emit = (e: AgentEvent) => {
@@ -70,7 +66,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     }
     return process.env.ANTHROPIC_API_KEY
   }
-  const state = () => ({ deck, path, hasKey: hasApiKey() || !!chatCli(), chat: hasApiKey() ? 'api' : chatCli(), setupDone: existsSync(setupFile) })
+  const state = () => ({ deck, path, hasKey: hasApiKey() || CLIS.some((c) => !!clis[c]), setupDone: existsSync(setupFile) })
   // Auto-Speichern: der Renderer speichert 1,5 s nach jeder Änderung. Was in diesem Fenster noch offen ist, sichert
   // flush() synchron, bevor ein anderes Deck geladen oder das Fenster geschlossen wird.
   const flush = () => {
@@ -161,10 +157,15 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
 
   ipcMain.handle('agent:send', async (_, text: string, model?: string) => {
     const key = apiKey()
+    const r = routeOf(model)
+    // Weg aus der Modellwahl: Vibe oder Codex, sonst Claude über den API-Key (hat Vorrang) oder Claude Code
+    const kind: 'api' | Cli = r ? r.cli : key || !clis.claude ? 'api' : 'claude'
+    if (kind !== 'api' && !clis[kind]) throw new Error(`${CLI_NAME[kind]} ist nicht installiert. Ein anderes Modell wählen oder in der Einrichtung nachsehen.`)
+    if (agent && agentKind !== kind) { agent.abort(); agent = null } // anderer Weg = neues Gespräch, das Deck bleibt
     const opts = { engine, onEvent: emit, apiKey: key, deck: deck ?? undefined, outDir: outDir() }
-    const cli = chatCli()
-    agent ??= !key && cli ? new CliAgent(cli, clis[cli]!, opts) : new DeckAgent(opts)
-    agent.model = modelOf(model).id // unbekannt → Standardmodell
+    agent ??= kind === 'api' ? new DeckAgent(opts) : new CliAgent(kind, clis[kind]!, opts)
+    agentKind = kind
+    agent.model = r ? r.model : modelOf(model).id // unbekannte Claude-ID → Standardmodell
     await agent.send(text)
   })
   ipcMain.handle('agent:abort', () => agent?.abort())
@@ -330,19 +331,37 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   // Angemeldet? Nur Codex sagt das schnell (`codex login status`, Exit-Code); bei den anderen null = unbekannt
   const loggedIn = (cli: Cli): Promise<boolean | null> => cli !== 'codex' || !clis.codex ? Promise.resolve(null)
     : new Promise((ok) => execFile(clis.codex!, ['login', 'status'], { timeout: 10_000 }, (e) => ok(!e)))
-  ipcMain.handle('setup:status', async () => ({
+  ipcMain.handle('setup:status', async () => (detect(), {
     key: hasApiKey(),
-    chat: chatCli(),
     clis: await Promise.all(CLIS.map(async (c) => ({ id: c, name: CLI_NAME[c], found: !!clis[c], mcp: registered(c), login: await loggedIn(c) }))),
   }))
-  // Chat ohne API-Key über dieses CLI führen
-  ipcMain.handle('setup:chat', async (_, c: unknown) => {
-    const cli = cliArg(c)
-    if (!clis[cli]) throw new Error(`${CLI_NAME[cli]} ist nicht installiert.`)
-    await writeFile(cliFile, cli)
-    agent?.abort()
-    agent = null // nächste Nachricht startet ein Gespräch mit dem neuen CLI
-  })
+  // Modell-Dropdown: Claude (Key oder Claude Code), Vibe mit den Modellen aus seiner config.toml (die aktive zuerst),
+  // Codex mit den sichtbaren Modellen seines Katalogs. Ohne Liste bleibt die Voreinstellung des CLI („vibe:“, „codex:“).
+  const vibeModels = (): ChatModels['vibe'] => {
+    let text = ''
+    try { text = readFileSync(config.vibe, 'utf8') } catch { /* noch nie gestartet */ }
+    const active = /^active_model\s*=\s*"([^"]+)"/m.exec(text)?.[1]
+    const list = text.split(/^\[\[models\]\]\s*$/m).slice(1).map((b) => b.split(/^\[/m)[0]).flatMap((b) => {
+      const alias = /^alias\s*=\s*"([^"]+)"/m.exec(b)?.[1] ?? /^name\s*=\s*"([^"]+)"/m.exec(b)?.[1]
+      const provider = /^provider\s*=\s*"([^"]+)"/m.exec(b)?.[1]
+      return alias ? [{ id: `vibe:${alias}`, name: `Vibe · ${alias}`, hint: [provider, alias === active && 'Voreinstellung in Vibe'].filter(Boolean).join(', ') }] : []
+    }).sort((a, b) => Number(b.id === `vibe:${active}`) - Number(a.id === `vibe:${active}`))
+    return list.length ? list : [{ id: 'vibe:', name: 'Vibe', hint: 'Modell aus der Vibe-Einstellung' }]
+  }
+  let codexModels: Promise<ChatModels['codex']> | null = null
+  const listCodex = (bin: string) => new Promise<ChatModels['codex']>((ok) => execFile(bin, ['debug', 'models'], { timeout: 20_000, maxBuffer: 20e6 }, (e, out) => {
+    try {
+      if (e) throw e
+      const all = (JSON.parse(out).models as { slug: string; display_name?: string; description?: string; visibility?: string; priority?: number }[])
+      const list = all.filter((m) => m.visibility === 'list').sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
+      ok(list.map((m) => ({ id: `codex:${m.slug}`, name: `Codex · ${m.display_name ?? m.slug}`, hint: m.description })))
+    } catch { ok([{ id: 'codex:', name: 'Codex', hint: 'Modell aus der Codex-Einstellung' }]) }
+  }))
+  ipcMain.handle('chat:models', async (): Promise<ChatModels> => (detect(), {
+    claude: hasApiKey() || !!clis.claude,
+    vibe: clis.vibe ? vibeModels() : [],
+    codex: clis.codex ? await (codexModels ??= listCodex(clis.codex)) : [],
+  }))
   ipcMain.handle('setup:mcp', async (_, c: unknown = 'claude') => {
     const cli = cliArg(c)
     const bin = clis[cli]
