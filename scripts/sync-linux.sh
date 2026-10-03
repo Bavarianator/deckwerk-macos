@@ -9,10 +9,10 @@ SRC="${DECKWERK_LINUX:-$HOME/deckwerk}"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 git -C "$SRC" archive HEAD | tar -x -C "$TMP"
 echo "Übernehme $(git -C "$SRC" log -1 --format='%h %s' HEAD)"
-# Mac-eigene Dateien (README, Mac-Icon, keine Linux-Installer, Workflows, diese Sync-Skripte) bleiben
+# Mac-eigene Dateien (README, CLAUDE.md, Mac-Icon, keine Linux-Installer, Workflows, diese Sync-Skripte) bleiben
 rsync -a --delete --checksum \
   --exclude node_modules --exclude out --exclude exports --exclude dist --exclude .git --exclude .github --exclude .claude \
-  --exclude README.md --exclude LICENSE --exclude install.sh --exclude scripts/install.sh --exclude scripts/uninstall.sh --exclude assets/icon-mac.png \
+  --exclude README.md --exclude CLAUDE.md --exclude LICENSE --exclude install.sh --exclude scripts/install.sh --exclude scripts/uninstall.sh --exclude assets/icon-mac.png \
   --exclude scripts/deckwerk.sh --exclude scripts/open.mjs --exclude scripts/verify-pptx.ts \
   --exclude scripts/spike-embed-fonts.ts --exclude scripts/macify.mjs --exclude scripts/sync-linux.sh \
   "$TMP/" ./

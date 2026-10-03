@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Deckwerk ist eine Electron-App (React-Oberfläche), in der eine KI Präsentationen aus einem festen Layout-Katalog baut. Die Engine misst jede Folie, passt Schriftgrößen an, prüft per Lint und exportiert PPTX, PDF, PNG und Markdown. Code, Kommentare, Doku und UI-Texte sind deutsch; neue Texte ebenso.
 
+**Dieses Repo ist der macOS-Fork.** Entwickelt wird in `~/deckwerk` (Linux); hier wird nur synchronisiert, gepatcht und über GitHub Actions gebaut. Code-Änderungen gehören nach `~/deckwerk`, nicht hierher.
+
 ## Befehle
 
 ```sh
@@ -16,13 +18,13 @@ npm run mcp:e2e             # MCP-Server gegen die echte Engine (E2E_HEADLESS=1:
 npm run check:layouts       # Stresstest Layout × Variante × Beispiel × Theme, ~1 h; eingrenzen mit DW_THEMES=beratung,keynote
 npm run smoke:claude        # App-Chat über echtes `claude -p` (kostet Anfragen); DECKWERK_CLI=codex|vibe
 npm run verify:pptx -- exports/<slug>.pptx   # PPTX gegen LibreOffice-Rendering (README „PPTX-Treue-Check“)
-npm run dist:linux          # AppImage
+npm run sync:linux          # committeten Stand von ~/deckwerk holen + scripts/macify.mjs anwenden
+npm run dist                # DMG (nur in CI auf macos-latest, nicht lokal bauen)
 ```
 
 - Einzelne Selbsttests (`scripts/check-*.ts`, `story-check.ts`, `validate-examples.ts`, `agent-smoke.ts`) tragen ihren Aufruf als Kommentar in der ersten Zeile: mit esbuild bündeln, dann mit node ausführen. Wird `design-guide.md` mitgebündelt, braucht esbuild `--loader:.md=text`.
-- Alle Skripte starten Electron mit `--ozone-platform=x11`, weil Chromiums PDF-Druck unter Wayland hängt.
 - `electron-vite build` leert `out/`. Dort keine Logs oder Testbündel ablegen. Arbeiten andere Sessions parallel, baue und teste in einer Kopie im Scratchpad (`src/`, `examples/` kopieren, `node_modules` verlinken).
-- CI (`.github/workflows/ci.yml`): typecheck, smoke, Selbsttests, render, mcp:e2e mit und ohne Bildschirm, AppImage-Größe, Installer.
+- CI (`.github/workflows/mac.yml`): baut auf macos-latest das DMG und testet die gepackte App (Fenster-Screenshot, PPTX/PDF-Export, MCP, onnxruntime, curl-Installer). Push auf `main` ersetzt das Prerelease „latest“, Tag `v<version>` erzeugt ein festes Release.
 
 ## Architektur
 
@@ -69,11 +71,10 @@ Jedes ändernde Tool antwortet mit Autofit und Lint pro Folie; daran korrigiert 
 
 Der Nutzer lehnt den „KI-Look“ ab. Gestaltet wird zurückhaltend: flach, linksbündig, eine Akzentfarbe, keine Kästen, Blobs, Verläufe oder Icon-Kacheln als Standard. Canva-Deko (Sticker, Masken, Motive, Texteffekte) gibt es nur auf ausdrücklichen Wunsch. Leitlinien für die KI stehen in `src/main/design-guide.md` §6, Hintergrund in `CANVA-VERGLEICH.md`. Neue Stil-Hebel für Themes sind kleine Enums mit nur guten Optionen. Sie müssen in `themeFromSpec`, im `themeSpec` in `tools.ts` und im Guide auftauchen.
 
-## Zusammenarbeit im Repo
+## Sync und Release
 
-- Oft arbeiten mehrere Claude-Sessions gleichzeitig und uncommittet in diesem Checkout.
-- Vor Änderungen an fremden Baustellen `git status` und `git diff` ansehen und gezielt editieren statt Dateien neu zu schreiben.
-- Commits nur auf Wunsch und mit expliziter Dateiliste.
-- macOS lebt im Fork `deckwerk-macos`, der per `macify.mjs` an Ankertexten patcht (z. B. `findCli`). Plattformabhängige Stellen nur mit Rücksicht darauf ändern.
-- Laufende Test-Instanzen über ihren `--remote-debugging-port` beenden, nicht per `pkill -f`.
-- AppImages nie nach `/tmp` entpacken: Läuft das tmpfs voll, entstehen still 0-Byte-Dateien.
+- `sync:linux` übernimmt per `git archive` nur den committeten HEAD von `~/deckwerk`, nie dessen Arbeitsverzeichnis (dort liegt Unfertiges anderer Sessions).
+- Mac-eigene Dateien sind vom Sync ausgenommen (Liste in `scripts/sync-linux.sh`): README, diese CLAUDE.md, `install.sh`, `.github`, `assets/icon-mac.png`, einige Skripte.
+- `scripts/macify.mjs` patcht nur noch package.json (Build-Konfiguration, Version) und Texte (Strg→⌘, F5→⌥⌘P, Dateimanager→Finder). Laufzeitverhalten für macOS steht upstream per `process.platform`. „Ankerstelle fehlt“ heißt: upstream hat den Text verschoben, Anker in `macify.mjs` nachziehen.
+- Die Mac-Version (`pkg.version` in `macify.mjs`) ist unabhängig von Linux; vor einem Tag erhöhen.
+- Nicht lokal bauen (Rechner zu schwach), nie in `~/deckwerk` bauen. Nach dem Sync pushen und den Lauf mit `gh run watch` verfolgen.
