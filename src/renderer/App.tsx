@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import '@fontsource-variable/inter'
 import './ui/app.css'
 import './ui/shell.css'
-import { FORMATS, type Deck, type FormatId, type Item, type Slide } from '../shared/deck'
+import { FORMATS, profileOf, type Deck, type PrintOptions, type FormatId, type Item, type Slide } from '../shared/deck'
 import { newId, resizeDeck } from '../shared/items'
 import { LAYOUTS, type LayoutId } from '../shared/layouts'
 import { THEMES } from '../shared/themes'
@@ -15,6 +15,7 @@ import { EditorScreen } from './ui/EditorScreen'
 import { KeyDialog } from './ui/KeyDialog'
 import { Logo } from './ui/Logo'
 import { FormatSheet } from './ui/FormatSheet'
+import { PrintSheet } from './ui/PrintSheet'
 import { LookSheet } from './ui/LookSheet'
 import { PresentScreen } from './ui/PresentScreen'
 import { SetupSheet } from './ui/SetupSheet'
@@ -45,8 +46,9 @@ export default function App() {
   const [nav, setNav] = useState(true) // Folienübersicht links
   const [panel, setPanel] = useState<Panel>(null) // rechts: Einfügen oder Anpassen
   const [look, setLook] = useState(false)
-  const [setup, setSetup] = useState(false) // Einrichtung: beim ersten Start von selbst (state().setupDone), sonst über das Zahnrad
+  const [setup, setSetup] = useState<boolean | string>(false) // Einrichtung: beim ersten Start von selbst (state().setupDone), sonst über das Zahnrad; Text = Schritt, mit dem sie aufgeht
   const [formats, setFormats] = useState(false)
+  const [printing, setPrinting] = useState(false) // Sheet „PDF für die Druckerei“
   const [view, setView] = useState<View>('slide') // einzelne Folie oder Übersicht aller Folien
   const [target, setTarget] = useState<Target | null>(null) // gewähltes Element als Bezug für die KI-Leiste
   const [story, setStory] = useState<StoryItem[] | null>(null) // geplante Storyline der KI (plan_storyline)
@@ -198,6 +200,12 @@ export default function App() {
     turnStart.current = null
   }
   useEffect(() => api.onDeckOpened((s) => load(s.deck, s.path)), []) // Doppelklick auf eine deck.json bei laufender App
+  // Cloud-Sync brachte eine neuere Fassung: nur das Deck tauschen, Chat und Auswahl bleiben
+  useEffect(() => api.onDeckSynced((d) => {
+    skipSave.current = true
+    setDoc(fresh(d))
+    setSel((i) => Math.min(i, Math.max(0, d.slides.length - 1)))
+  }), [])
   const actions = {
     onNew: () => guard(async () => {
       await api.newDeck() // Main speichert offene Änderungen vorher (flush)
@@ -217,9 +225,9 @@ export default function App() {
       setSaved(true)
       setStatus({ text: `Gespeichert: ${p}` })
     }),
-    onExport: (format: 'pptx' | 'pdf' | 'png' | 'md') => guard(async () => {
-      setStatus({ text: `Exportiere ${format.toUpperCase()} …` })
-      setStatus({ text: `Exportiert: ${await api.exportDeck(format)}` })
+    onExport: (format: 'pptx' | 'docx' | 'pdf' | 'png' | 'zip' | 'md' | 'print', print?: PrintOptions) => guard(async () => {
+      setStatus({ text: `Exportiere ${format === 'print' ? 'Druck-PDF' : format.toUpperCase()} …` })
+      setStatus({ text: `Exportiert: ${await api.exportDeck(format, print)}` })
     }),
   }
 
@@ -233,7 +241,7 @@ export default function App() {
     // Kontext (Canvas-Element oder angezeigte Folie für „diese Folie“) geht nur an die KI, der Chat zeigt den Text
     const slide = deck?.slides[index]
     context ??= slide && `Gerade angezeigt: Folie ${index + 1} (ID „${slide.id}“, Layout ${slide.layout})`
-    if (deck?.style === 'mutig') context = [context, 'Deck-Stil: mutig (Design-Guide §6 „Stil des Decks“)'].filter(Boolean).join(' · ') // Regler im Look-Bereich
+    if (deck?.style) context = [context, `Deck-Stil: ${deck.style} (Design-Guide §6 „Stil des Decks“)`].filter(Boolean).join(' · ') // Regler im Look-Bereich oder Wahl der KI
     api.send(context ? `${text}\n\n(${context})` : text, model)
       .catch((e) => setMsgs((m) => [...m, { kind: 'error', text: errText(e) }]))
       .finally(() => setBusy(false))
@@ -329,6 +337,8 @@ export default function App() {
             onLook={openLook}
             onExport={actions.onExport}
             onFormats={() => { setPicked([]); setFormats(true) }}
+            canPrint={!!deck && profileOf(deck) === 'doc'}
+            onPrint={() => setPrinting(true)}
             onPresent={() => present(0)}
           />
           {deck && view === 'grid' ? (
@@ -367,11 +377,13 @@ export default function App() {
         </>
       )}
       {home && status?.error && <div className="toast material" role="alert">{status.text}</div>}
+      {printing && deck && <PrintSheet deck={deck} onExport={(o) => actions.onExport('print', o)} onClose={() => setPrinting(false)} />}
       {formats && deck && <FormatSheet deck={deck} index={index} onApply={(id) => commit((d) => resizeDeck(d, id))} onCopies={saveCopies} onClose={() => setFormats(false)} />}
       {look && deck && <LookSheet deck={deck} busy={busy} patchDeck={patchDeck} pickImage={api.pickImage} onAsk={(t) => send(t)} onClose={() => setLook(false)} />}
-      {setup && <SetupSheet model={model} onModel={pickModel} onKeySaved={() => { void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }} onClose={() => { setSetup(false); void loadChoices() }} />}
+      {setup && <SetupSheet model={model} onModel={pickModel} start={typeof setup === 'string' ? setup : undefined} onKeySaved={() => { void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }} onClose={() => { setSetup(false); void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }} />}
       {askKey && (
         <KeyDialog
+          onSetup={() => { setAskKey(false); setSetup('KI-Zugang') }}
           onClose={() => setAskKey(false)}
           onSave={async (key) => {
             await api.setApiKey(key).catch((e) => { throw new Error(errText(e)) })

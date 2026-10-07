@@ -1,12 +1,20 @@
 import { Fragment, type ReactNode } from 'react'
 import type { z } from 'zod'
 import { LAYOUTS } from '../shared/layouts'
-import { Backdrop, Box, ChartBox, Frame, Icon, Img, QrCode, T, onPhoto, photoOf, rgba, useSlide } from './slide'
+import { Backdrop, Box, ChartBox, Frame, Icon, Img, QrCode, T, onPhoto, photoOf, rgba, useSlide, type PhotoRef } from './slide'
 import { annotation } from '../shared/charts'
+import { sizeOf } from '../shared/deck'
 import { EXTRA_COMPONENTS } from './layouts-extra'
 
 type C<K extends keyof typeof LAYOUTS> = z.infer<(typeof LAYOUTS)[K]['schema']>
 type Props<K extends keyof typeof LAYOUTS> = { c: C<K>; v?: string }
+
+// Kennzahl → [Einheit vorn, Zahl, Einheit hinten], z. B. „855 €“ → ['', '855', ' €'], „€ 12“ → ['€ ', '12', ''].
+// Nur mit Zahl vorn und ohne Ziffern in der Einheit („Q3“, „24/7“, „30–45“ bleiben ganz). Die Teile ergeben wieder den Text.
+export function splitUnit(v: string): [string, string, string] {
+  const m = v.match(/^([€$£¥]\s?)?((?:[+\-−–±~≈<>]\s?)?\d+(?:[.,\s]\d{3})*(?:[.,]\d+)?(?:\s?[–-]\s?\d+(?:[.,]\d+)?)?)([^\d*[]*)$/)
+  return m && (m[1] || m[3]) ? [m[1] ?? '', m[2], m[3]] : ['', v, '']
+}
 
 function Eyebrow({ text, center }: { text?: string; center?: boolean }) {
   if (!text) return null
@@ -29,12 +37,13 @@ export function Header({ c, maxLines = 2 }: { c: { eyebrow?: string; title: stri
 }
 
 function Points({ items, base, build }: { items?: string[]; base: string; build?: number }) {
+  const round = useSlide().theme.elements === 'solid' // line zeichnet einen Strich: in der PPTX Rechteck statt flacher Ellipse
   if (!items?.length) return null
   return (
     <div className="points">
       {items.map((p, j) => (
         <div className="point" key={j}>
-          <Box slot={`_pd.${base}.${j}`} className="pdot" ellipse build={build} />
+          <Box slot={`_pd.${base}.${j}`} className="pdot" ellipse={round} build={build} />
           <T role="body" slot={`${base}.${j}`} build={build}>{p}</T>
         </div>
       ))}
@@ -42,18 +51,33 @@ function Points({ items, base, build }: { items?: string[]; base: string; build?
   )
 }
 
+// Größere Schrift bei wenig Inhalt (few) nur im Breitformat und ohne lange Komposita: Ein Wort bricht nicht um, und der
+// Faktor wirkt auch auf der kleinsten Autofit-Stufe → Breitenüberlauf. In 4:3 und Hochformaten sind die Spalten dafür zu schmal.
+function useWide() {
+  const { w, h } = sizeOf(useSlide().deck)
+  return w / h >= 1.6
+}
+const longestWord = (texts: (string | undefined)[]) => Math.max(0, ...texts.flatMap((t) => t?.split(/[\s-]+/) ?? []).map((x) => x.length))
+
+// Variante side: Foto randabfallend rechts neben einer schmalen Textspalte auf dem Grund, ohne Verlauf (Maße in slide.css „Bild neben Text“)
+function SidePhoto({ image }: { image: PhotoRef }) {
+  return <div className="media right side-media"><Img {...image} slot="image" /></div>
+}
+const SIDE_SAFE = 'safe-left side-safe'
+
 function Cover({ c, v }: Props<'cover'>) {
   const { theme } = useSlide()
   const img = photoOf(c.image)
   const photo = !!img?.src
+  const side = photo && v === 'side' // ohne Foto wie left
   return (
-    <Frame decor="hero" media={photo && <Backdrop image={img!} scrim={v === 'center' ? 'full' : 'left'} />}>
-      <div className={`cover ${v === 'center' ? 'center' : ''} ${photo ? 'on-photo' : ''}`} style={photo ? onPhoto(theme) : undefined}>
+    <Frame decor="hero" media={photo && (side ? <SidePhoto image={img!} /> : <Backdrop image={img!} scrim={v === 'center' ? 'full' : v === 'bottom' ? 'bottom' : 'left'} />)} safeClass={side ? SIDE_SAFE : undefined}>
+      <div className={`cover ${v === 'center' ? 'center' : v === 'bottom' ? 'bottom' : side ? 'side' : ''} ${photo && !side ? 'on-photo' : ''}`} style={photo && !side ? onPhoto(theme) : undefined}>
         <div className="cover-top">{theme.logo && <Img src={theme.logo} slot="_logo" className="cover-logo" contain />}</div>
         <div className="cover-main">
           <Eyebrow text={c.eyebrow} center={v === 'center'} />
-          <T role="display" slot="title" maxLines={3} className="cover-title">{c.title}</T>
-          {c.subtitle && <T role="body" slot="subtitle" maxLines={2} className="cover-sub">{c.subtitle}</T>}
+          <T role="display" slot="title" maxLines={side ? 4 : 3} className="cover-title">{c.title}</T>
+          {c.subtitle && <T role="body" slot="subtitle" maxLines={side ? 4 : 2} className="cover-sub">{c.subtitle}</T>}
         </div>
         <div className="cover-bottom">{c.meta && <T role="label" slot="meta" className="muted">{c.meta}</T>}</div>
       </div>
@@ -100,7 +124,7 @@ function Section({ c }: Props<'section'>) {
       <div className="media right section-media"><Img src={img!.src} focus={img!.focus} look={img!.look} slot="image" /></div>
     )}>
       <div className="section">
-        {c.number && <T role="display" slot="number" className="section-num">{c.number}</T>}
+        {c.number && <T role="hero" slot="number" className="section-num">{c.number}</T>}
         <T role="display" slot="title" maxLines={photo ? 3 : 2}>{c.title}</T>
         {c.subtitle && <T role="body" slot="subtitle" maxLines={photo ? 3 : 2} className="section-sub">{c.subtitle}</T>}
       </div>
@@ -108,11 +132,29 @@ function Section({ c }: Props<'section'>) {
   )
 }
 
-function Statement({ c }: Props<'statement'>) {
+function Statement({ c, v }: Props<'statement'>) {
+  const center = v === 'center'
+  if (v === 'poster') {
+    // Plakat nur für kurze Sätze; längerer Text fällt auf die normale Größe zurück, statt zu überlaufen
+    const big = c.text.replace(/\*\*/g, '').length <= 60
+    return (
+      <Frame decor="hero">
+        <div className="statement poster">
+          <T role={big ? 'display' : 'statement'} slot="text" maxLines={big ? 3 : 4} className={`statement-text ${big ? 'big' : ''}`} build={0}>{c.text}</T>
+          {(c.eyebrow || c.source) && (
+            <div className="statement-poster-foot">
+              <Eyebrow text={c.eyebrow} />
+              {c.source && <T role="label" slot="source" className="muted" build={0}>{c.source}</T>}
+            </div>
+          )}
+        </div>
+      </Frame>
+    )
+  }
   return (
     <Frame decor="hero">
-      <div className="statement">
-        <Eyebrow text={c.eyebrow} center />
+      <div className={`statement ${center ? 'center' : ''}`}>
+        <Eyebrow text={c.eyebrow} center={center} />
         <T role="statement" slot="text" maxLines={4} className="statement-text" build={0}>{c.text}</T>
         {c.source && (
           <div className="statement-source">
@@ -128,10 +170,11 @@ function Statement({ c }: Props<'statement'>) {
 function Bullets({ c, v }: Props<'bullets'>) {
   const sub = c.items.some((it) => it.sub)
   const cards = c.items.length <= 4 && v === 'cards'
+  const few = !cards && c.items.length <= 3
   return (
     <Frame>
       <Header c={c} />
-      <div className={`bullets ${sub ? 'has-sub' : ''} ${cards ? 'as-cards' : c.items.length <= 3 ? 'few' : ''}`} data-fit data-slot="items" style={cards ? { gridTemplateColumns: `repeat(${c.items.length}, 1fr)` } : undefined}>
+      <div className={`bullets ${sub ? 'has-sub' : ''} ${cards ? 'as-cards' : few ? 'few' : ''}`} data-fit data-slot="items" style={cards ? { gridTemplateColumns: `repeat(${c.items.length}, 1fr)` } : undefined}>
         {c.items.map((it, i) => {
           const mark = it.icon ? (
             <Box slot={`_ib.${i}`} className="bullet-icon" build={i}>
@@ -147,7 +190,7 @@ function Bullets({ c, v }: Props<'bullets'>) {
           const text = (
             <div className="bullet-text">
               <T role={cards ? 'h3' : 'body'} slot={`items.${i}.text`} build={i} className="bullet-main">{it.text}</T>
-              {it.sub && <T role={c.items.length <= 4 ? 'label' : 'small'} slot={`items.${i}.sub`} build={i} className="muted">{it.sub}</T>}
+              {it.sub && <T role={few ? 'body' : c.items.length <= 4 ? 'label' : 'small'} slot={`items.${i}.sub`} build={i} className="muted">{it.sub}</T>}
             </div>
           )
           return cards ? (
@@ -162,14 +205,18 @@ function Bullets({ c, v }: Props<'bullets'>) {
 }
 
 function TwoColumn({ c, v }: Props<'two-column'>) {
+  // wenig Inhalt je Spalte: größer und luftiger, sonst bleibt die untere Hälfte leer. Zeichenbudget, weil Autofit bei
+  // längeren Punkten sonst den Folientitel verkleinert
+  const few = useWide() && longestWord([c.left.heading, c.right.heading]) <= 20
+    && [c.left, c.right].every((col) => (col.points?.length ?? 0) <= 3 && (col.text ?? '').length + (col.points ?? []).join('').length <= 160)
   return (
     <Frame>
       <Header c={c} />
-      <div className="cols">
+      <div className={`cols ${few ? 'few' : ''}`}>
         {(['left', 'right'] as const).map((k, i) => {
           const col = c[k]
           return (
-            <Box key={k} slot={`_card.${k}`} className={`card col-card ${v === 'highlight-right' && k === 'right' ? 'hl' : ''}`} build={i} fit>
+            <Box key={k} slot={`_card.${k}`} className={`${!v || v === 'rule' ? 'col-rule' : 'card'} col-card ${v === 'highlight-right' && k === 'right' ? 'hl' : ''}`} build={i} fit>
               <T role="h2" slot={`${k}.heading`} build={i}>{col.heading}</T>
               {col.text && <T role="body" slot={`${k}.text`} build={i}>{col.text}</T>}
               <Points items={col.points} base={`${k}.points`} build={i} />
@@ -215,7 +262,7 @@ function KpiGrid({ c, v }: Props<'kpi-grid'>) {
           return (
             <Box key={i} slot={`_card.${i}`} className={`${plain ? 'kpi-plain' : 'card'} kpi-card ${i === focus ? (plain ? 'big' : 'hl') : ''}`} build={i} fit>
               {plain && i > 0 && <Box slot={`_rule.${i}`} className="kpi-rule" build={i} />}
-              <T role="kpi" slot={`kpis.${i}.value`} build={i} className="kpi-value">{k.value}</T>
+              <T role="kpi" slot={`kpis.${i}.value`} build={i} className="kpi-value" unit>{k.value}</T>
               <T role={c.kpis.length <= 3 ? 'body' : 'label'} slot={`kpis.${i}.label`} build={i} className="kpi-label">{k.label}</T>
               {k.delta && (
                 <div className={`kpi-delta ${k.sentiment ?? 'neutral'}`}>
@@ -267,6 +314,7 @@ function ChartSlide({ c }: Props<'chart'>) {
 // Autofit verkleinert bei Bedarf wie immer.
 function Timeline({ c }: Props<'timeline'>) {
   const roomy = c.items.length <= 4
+  const round = useSlide().theme.elements === 'solid' // wie Points
   return (
     <Frame>
       <Header c={c} />
@@ -274,9 +322,9 @@ function Timeline({ c }: Props<'timeline'>) {
         <Box slot="_axis" className="tl-axis" />
         {c.items.map((it, i) => (
           <div className="tl-item" key={i}>
-            <Box slot={`_dot.${i}`} className="tl-dot" ellipse build={i} />
+            <Box slot={`_dot.${i}`} className="tl-dot" ellipse={round} build={i} />
             <Box slot={`_card.${i}`} className="card tl-card" build={i} fit>
-              <T role="label" slot={`items.${i}.date`} build={i} className="tl-date">{it.date}</T>
+              <T role={roomy ? 'h2' : 'h3'} slot={`items.${i}.date`} build={i} className="tl-date">{it.date}</T>
               <T role={roomy ? 'h2' : 'h3'} slot={`items.${i}.title`} build={i}>{it.title}</T>
               {it.desc && <T role="body" slot={`items.${i}.desc`} build={i} className="muted">{it.desc}</T>}
             </Box>
@@ -288,22 +336,17 @@ function Timeline({ c }: Props<'timeline'>) {
 }
 
 function Process({ c }: Props<'process'>) {
+  // wenige Schritte: große Nummern, größere Titel und Beschreibungen – sonst bleibt die untere Hälfte leer
+  const few = useWide() && c.steps.length <= 3 && longestWord(c.steps.map((s) => s.title)) <= 14 && longestWord(c.steps.map((s) => s.desc)) <= 20
   return (
     <Frame>
       <Header c={c} />
-      <div className="proc">
+      <div className={`proc ${few ? 'few' : ''}`}>
         {c.steps.map((s, i) => (
           <Fragment key={i}>
-            {i > 0 && (
-              <div className="proc-arrow">
-                <Icon name="chevron-right" slot={`_arrow.${i}`} size={26} build={i} />
-              </div>
-            )}
             <Box slot={`_card.${i}`} className="card proc-card" build={i} fit>
               <div className="proc-head">
-                <Box slot={`_badge.${i}`} className="proc-badge" ellipse build={i}>
-                  <T role="label" slot={`_n.${i}`} build={i}>{String(i + 1)}</T>
-                </Box>
+                <T role={few ? 'kpi' : 'h1'} slot={`_n.${i}`} build={i} className="proc-num">{String(i + 1).padStart(2, '0')}</T>
                 {s.icon && <Icon name={s.icon} slot={`_icon.${i}`} size={28} build={i} className="proc-icon" />}
               </div>
               <T role="h2" slot={`steps.${i}.title`} build={i}>{s.title}</T>
@@ -316,16 +359,17 @@ function Process({ c }: Props<'process'>) {
   )
 }
 
-function Closing({ c }: Props<'closing'>) {
+function Closing({ c, v }: Props<'closing'>) {
   const { theme } = useSlide()
   const img = photoOf(c.image)
   const photo = !!img?.src
+  const side = photo && v === 'side'
   return (
-    <Frame decor="hero" media={photo && <Backdrop image={img!} scrim="left" />}>
-      <div className={`closing ${photo ? 'on-photo' : ''}`} style={photo ? onPhoto(theme) : undefined}>
+    <Frame decor="hero" media={photo && (side ? <SidePhoto image={img!} /> : <Backdrop image={img!} scrim="left" />)} safeClass={side ? SIDE_SAFE : undefined}>
+      <div className={`closing ${side ? 'side' : photo ? 'on-photo' : ''}`} style={photo && !side ? onPhoto(theme) : undefined}>
         <div className="closing-main">
-          <T role="display" slot="title" maxLines={3} className="cover-title">{c.title}</T>
-          {c.subtitle && <T role="body" slot="subtitle" maxLines={2} className="cover-sub">{c.subtitle}</T>}
+          <T role="display" slot="title" maxLines={side ? 4 : 3} className="cover-title">{c.title}</T>
+          {c.subtitle && <T role="body" slot="subtitle" maxLines={side ? 4 : 2} className="cover-sub">{c.subtitle}</T>}
         </div>
         <div className="closing-bottom">
           {c.contact?.length ? (
@@ -356,17 +400,18 @@ function PhotoSlide({ c, v }: Props<'photo'>) {
   const img = photoOf(c.image)
   const photo = !!img?.src
   const card = v === 'card'
+  const side = photo && v === 'side'
   const text = (
     <>
       <Eyebrow text={c.eyebrow} />
-      <T role="h1" slot="title" maxLines={3}>{c.title}</T>
-      {c.subtitle && <T role="body" slot="subtitle" maxLines={3} className="muted">{c.subtitle}</T>}
+      <T role="h1" slot="title" maxLines={side ? 5 : 3}>{c.title}</T>
+      {c.subtitle && <T role="body" slot="subtitle" maxLines={side ? 4 : 3} className="muted">{c.subtitle}</T>}
     </>
   )
-  // Ohne Foto: Akzentfläche statt Bild, damit Text und Kontrast stimmen
+  // Ohne Foto: Akzentfläche statt Bild, damit Text und Kontrast stimmen (side dann wie text-bottom)
   return (
-    <Frame decor="hero" tone={photo ? undefined : 'accent'} media={photo && <Backdrop image={img!} scrim={card ? 'none' : v === 'text-left' ? 'left' : 'bottom'} />}>
-      <div className={`photo-slide ps-${v ?? 'text-bottom'}`} style={photo && !card ? onPhoto(theme) : undefined}>
+    <Frame decor="hero" tone={photo ? undefined : 'accent'} media={photo && (side ? <SidePhoto image={img!} /> : <Backdrop image={img!} scrim={card ? 'none' : v === 'text-left' ? 'left' : 'bottom'} />)} safeClass={side ? SIDE_SAFE : undefined}>
+      <div className={`photo-slide ps-${v === 'side' && !side ? 'text-bottom' : v ?? 'text-bottom'}`} style={photo && !card && !side ? onPhoto(theme) : undefined}>
         {card ? <PhotoCard>{text}</PhotoCard> : <div className="photo-text">{text}</div>}
       </div>
     </Frame>

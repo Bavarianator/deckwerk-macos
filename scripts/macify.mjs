@@ -45,7 +45,8 @@ writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
 const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]))
 for (const f of walk('src/renderer').filter((f) => /\.tsx?$/.test(f))) {
   const s = readFileSync(f, 'utf8')
-  const t = s.replace(/Strg\+(⇧\+|Umschalt\+)/g, '⌘⇧').replace(/Strg\+(\S)/g, '⌘$1').replaceAll('aus dem Dateimanager', 'aus dem Finder').replaceAll('<kbd>Strg</kbd>', '<kbd>⌘</kbd>').replaceAll('(F5)', '(⌥⌘P)').replaceAll('<kbd>F5</kbd>', '<kbd>⌥⌘P</kbd>')
+  // Strg+Alt+T steht nur im Linux-Zweig (Terminal öffnen) und bleibt; „Strg + −)“ aus den Zoom-Titeln wird „⌘−)“
+  const t = s.replace(/Strg\+(⇧\+|Umschalt\+)/g, '⌘⇧').replace(/Strg\+(?!Alt)(\S)/g, '⌘$1').replace(/Strg \+ (\S\))/g, '⌘$1').replaceAll('<kbd>Entf</kbd>', '<kbd>⌫</kbd>').replaceAll('(Umschalt: ', '(⇧: ').replaceAll('aus dem Dateimanager', 'aus dem Finder').replaceAll('<kbd>Strg</kbd>', '<kbd>⌘</kbd>').replaceAll('(F5)', '(⌥⌘P)').replaceAll('<kbd>F5</kbd>', '<kbd>⌥⌘P</kbd>')
   if (t !== s) writeFileSync(f, t)
 }
 // X11-Flag (nur Linux/Wayland) überall entfernen, wo Electron gestartet wird

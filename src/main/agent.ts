@@ -4,20 +4,21 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod'
 import type { BetaMessageParam, BetaToolResultContentBlockParam, BetaContentBlockParam } from '@anthropic-ai/sdk/resources/beta/messages/messages'
-import type { Deck, Measured } from '../shared/deck'
+import { FORMATS, type Deck, type FormatId, type Measured, type PrintOptions } from '../shared/deck'
 import type { Issue } from '../shared/lint'
-import { LAYOUTS, LAYOUT_IDS } from '../shared/layouts'
+import { LAYOUTS, LAYOUT_IDS, type LayoutId } from '../shared/layouts'
 import { DEFAULT_MODEL, modelOf, type Effort } from '../shared/models'
 import guide from './design-guide.md?raw'
-import { buildCatalog, buildTools, houseStyle, mimeOf, type ToolDef, type ToolOutput } from './tools'
+import { buildCatalog, buildTools, houseStyle, mimeOf, recentLooks, type ToolDef, type ToolOutput } from './tools'
 
 // Vertrag zur Engine (implementiert in engine.ts). Alle Maße px auf der 1280x720-Folie.
+export type ExportFormat = 'pptx' | 'docx' | 'pdf' | 'png' | 'md' | 'zip' | 'print' // docx = Word, Text bearbeitbar auf Hintergrundbild; zip = PNG je Folie + PDF in einer Datei (Social-Karussell); print = PDF für die Druckerei (PrintOptions in deck.ts)
 export interface Engine {
   measure(deck: Deck, indices?: number[]): Promise<Measured[]> // Autofit + Messung, Reihenfolge wie indices
   renderPng(deck: Deck, indices: number[], width?: number): Promise<Buffer[]> // PNG pro Folie (default 1024 px breit)
   renderOverview(deck: Deck): Promise<Buffer> // Kontaktbogen aller Folien, 1 PNG
   lint(deck: Deck): Promise<Issue[]>
-  exportDeck(deck: Deck, format: 'pptx' | 'pdf' | 'png' | 'md', outDir: string): Promise<string[]>
+  exportDeck(deck: Deck, format: ExportFormat, outDir: string, print?: PrintOptions): Promise<string[]> // print nur bei format 'print'
   thumbnail?(img: Buffer, width: number): Buffer | null // JPEG-Vorschau eines Bildes ohne Rendern; null = Format unbekannt (WebP)
 }
 
@@ -45,27 +46,35 @@ export interface DeckAgentOptions {
 
 const WORKFLOW = `## Arbeitsablauf
 1. Höchstens 2–3 Rückfragen (mit ask_user, falls vorhanden), sonst sinnvolle Defaults annehmen.
-2. Erst die Leitidee in einem Satz (Guide §2 „Die Idee“: Bild für das Ganze, Haken, ein mutiger Höhepunkt), dann die Storyline als Liste von Action Titles (mit plan_storyline, falls vorhanden, sonst im Chat), dann create_deck und add_slides in Batches.
+2. Erst die Leitidee in einem Satz (Guide §2 „Die Idee“: Bild für das Ganze, Haken, ein mutiger Höhepunkt), dann die Storyline als Liste der Titel (Datenfolien als Aussage-Satz, Bühnenfolien kurz) (mit plan_storyline, falls vorhanden, sonst im Chat), dann create_deck und add_slides in Batches.
 3. QA-Schleife (max. 3 Runden): Fehler aus den Tool-Rückmeldungen und lint_deck beheben → render_overview kritisch prüfen (Rhythmus, Dichte, Konsistenz) → nachbessern.
 4. Animationen prüfen (ein Übergangstyp, maximal ein Build pro Folie, keine Animation auf Titeln), Speaker Notes ergänzen.
 5. Kurze Zusammenfassung; exportieren nur, wenn der Nutzer es wünscht.
 Antworte auf Deutsch, knapp.`
 
 export function buildSystemPrompt(): string {
-  const style = houseStyle()
-  return [guide.trim(), buildCatalog(), WORKFLOW, ...(style ? [`## Hausstil des Nutzers (gilt für jedes Deck, hat Vorrang vor dem Design-Guide)\n${style}`] : [])].join('\n\n')
+  const style = houseStyle(), recent = recentLooks()
+  return [guide.trim(), buildCatalog(), WORKFLOW, ...(style ? [`## Hausstil des Nutzers (gilt für jedes Deck, hat Vorrang vor dem Design-Guide)\n${style}`] : []),
+    ...(recent.length ? [`## Zuletzt gebaute Decks (nur für neue Decks: im Typ nicht wiederholen, Design-Guide §6 „Abwechslung“; bestehende Decks behalten ihr Design)\n${recent.map(({ title, typ: t }) => `- „${title}“: ${t.hell}, ${t.schrift}-Titel ${t.gewicht} (${t.font}), Grund ${t.grund}, Bauteile ${t.bauteile}, Akzent ${t.akzent}`).join('\n')}`] : [])].join('\n\n')
 }
 
 const img = (buf: Buffer): BetaContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: mimeOf(buf), data: buf.toString('base64') } })
 
 // Ein Beispiel-Deck (typ-Sample pro Layout) rendern → Bilder für den ersten User-Turn. Stabil → cachebar.
 async function catalogThumbnails(engine: Engine): Promise<BetaContentBlockParam[]> {
-  const deck: Deck = {
-    title: 'Katalog', theme: { id: 'beratung' }, transition: 'none', mode: 'click',
-    slides: LAYOUT_IDS.map((id) => ({ id: `cat-${id}`, layout: id, content: LAYOUTS[id].samples.typ })),
+  // Layouts mit sizes (A4-Dokumente, Flyer) im eigenen Format zeigen, sonst sieht die KI sie in 16:9; ein Deck je Format
+  const fmt = (id: LayoutId): FormatId => (LAYOUTS[id] as { sizes?: FormatId[] }).sizes?.[0] ?? '16:9'
+  const pngs = new Map<LayoutId, Buffer>()
+  for (const f of new Set(LAYOUT_IDS.map(fmt))) {
+    const ids = LAYOUT_IDS.filter((id) => fmt(id) === f)
+    const deck: Deck = {
+      title: 'Katalog', theme: { id: 'beratung' }, transition: 'none', mode: 'click', size: { w: FORMATS[f].w, h: FORMATS[f].h },
+      slides: ids.map((id) => ({ id: `cat-${id}`, layout: id, content: LAYOUTS[id].samples.typ })),
+    }
+    const out = await engine.renderPng(deck, ids.map((_, i) => i), 512)
+    ids.forEach((id, i) => pngs.set(id, out[i]))
   }
-  const pngs = await engine.renderPng(deck, deck.slides.map((_, i) => i), 512)
-  return pngs.flatMap((p, i) => [{ type: 'text', text: `Layout ${LAYOUT_IDS[i]}:` } as BetaContentBlockParam, img(p)])
+  return LAYOUT_IDS.flatMap((id) => [{ type: 'text', text: `Layout ${id}:` } as BetaContentBlockParam, img(pngs.get(id)!)])
 }
 
 // Tool-Status-Chips für die UI (auch für den Chat über Claude Code, claude-agent.ts)

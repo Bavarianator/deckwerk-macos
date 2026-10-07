@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Deckwerk ist eine Electron-App (React-Oberfläche), in der eine KI Präsentationen aus einem festen Layout-Katalog baut. Die Engine misst jede Folie, passt Schriftgrößen an, prüft per Lint und exportiert PPTX, PDF, PNG und Markdown. Code, Kommentare, Doku und UI-Texte sind deutsch; neue Texte ebenso.
+Deckwerk ist eine Electron-App (React-Oberfläche), in der eine KI Präsentationen aus einem festen Layout-Katalog baut. Die Engine misst jede Folie, passt Schriftgrößen an, prüft per Lint und exportiert PPTX, Word (DOCX), PDF, PNG und Markdown. Code, Kommentare, Doku und UI-Texte sind deutsch; neue Texte ebenso.
 
 **Dieses Repo ist der macOS-Fork.** Entwickelt wird in `~/deckwerk` (Linux); hier wird nur synchronisiert, gepatcht und über GitHub Actions gebaut. Code-Änderungen gehören nach `~/deckwerk`, nicht hierher.
 
@@ -15,7 +15,7 @@ npm run typecheck           # tsc über das ganze Projekt
 npm run smoke               # KI-Tools + MCP-Server gegen Mock-Engine (ohne Electron, ohne API-Key)
 npm run render examples/pitch.json   # → exports/<slug>.pptx/.pdf/<slug>/NN.png + Lint-Report
 npm run mcp:e2e             # MCP-Server gegen die echte Engine (E2E_HEADLESS=1: ohne Bildschirm)
-npm run check:layouts       # Stresstest Layout × Variante × Beispiel × Theme, ~1 h; eingrenzen mit DW_THEMES=beratung,keynote
+npm run check:layouts       # Stresstest Layout × Variante × Beispiel × Theme, ~1 h; eingrenzen mit DW_THEMES=beratung,keynote, DW_LAYOUTS=doc-text,offer; DW_FORMATS=4:5,a4 prüft zusätzlich alle Layouts in diesen Formaten
 npm run smoke:claude        # App-Chat über echtes `claude -p` (kostet Anfragen); DECKWERK_CLI=codex|vibe
 npm run verify:pptx -- exports/<slug>.pptx   # PPTX gegen LibreOffice-Rendering (README „PPTX-Treue-Check“)
 npm run sync:linux          # committeten Stand von ~/deckwerk holen + scripts/macify.mjs anwenden
@@ -42,6 +42,7 @@ Snapshots tragen eine Markierungszeile mit Sequenznummer, weil `capturePage` son
 - Die `samples` speisen den Stresstest und die Katalog-Vorschaubilder für die KI.
 - Linien auf `data-pptx`-Boxen als `::before`: `border-top` wird in der PPTX zum Rahmen ringsum.
 - Keine generischen Klassennamen in `slide.css`, sonst leaken UI-Klassen wie `.plain` in die Folien.
+- Formate: `profileOf(deck)` (`deck.ts`) leitet aus der Größe `slides`/`social`/`doc` ab. Daran hängen die Lint-Grenzen (`PROFILE` in `lint.ts`) und der Schriftfaktor im Autofit (`measure.ts`). `Frame` setzt `prof-*`, `fmt-tall` und `fmt-narrow` am `.slide`; der Block „Formate“ am Ende von `slide.css` stapelt Spalten und setzt Bilder nach oben. Layouts mit `sizes` (Fließtext, Angebot) gelten nur in diesen Formaten, der Stresstest prüft sie dort.
 
 **KI-Werkzeuge** (`src/main/tools.ts`): `buildTools(ctx)` ist die einzige Definition. Sie ist SDK- und Electron-frei, damit die Smoke-Tests sie unter Node laufen lassen können. Drei Wege nutzen sie:
 - `DeckAgent` (`src/main/agent.ts`): Anthropic-API, Tool-Runner, Systemprompt = `src/main/design-guide.md` (per `?raw`) + `buildCatalog()` + Hausstil `~/Deckwerk/hausstil.md`.
@@ -61,10 +62,12 @@ Jedes ändernde Tool antwortet mit Autofit und Lint pro Folie; daran korrigiert 
 - `asset://` und der PPTX-Export laden nur Dateien, deren Endung auf `MEDIA_EXT` (`src/shared/deck.ts`) passt. Neue Medientypen dort ergänzen.
 
 **Ablage und Einstellungen**:
+- Brand-Kit (Farben, Schriften, Logo) in `~/Deckwerk/brand.json`: `create_deck` wendet es an, solange `brand` nicht gesetzt ist (`defaultBrand()` in `tools.ts`); `DECKWERK_HOME` setzt es in Tests um.
 - Decks liegen unter `~/Deckwerk/<titel>/deck.json`, alte Stände in `versions/`. Bilder liegen in `~/Deckwerk/assets/`.
 - In Tests setzt `DECKWERK_HOME` das Deck-Verzeichnis um.
 - Der Anthropic-Key liegt mit `safeStorage` verschlüsselt im userData.
 - Gemeinsame Einstellungen für App, Entwicklung und MCP-Prozess liegen unter `appData/deckwerk/`, weil sich das userData zwischen diesen Wegen unterscheidet. Dazu gehören `setup-done` und `image-settings.bin` (Bild-KI: Mammouth/OpenAI-Key, Anbieter, Modell).
+- Cloud-Sync (`src/main/sync.ts`, Electron-frei, läuft auch in der Android-Engine): WebDAV-Spiegel von `~/Deckwerk` ohne `versions/`, `out/`, `models/`, Punktdateien; Abgleich über `.sync-state.json`, Konflikt → neuere gewinnt, ältere deck.json nach `versions/`. Zugang in `appData/deckwerk/sync.bin`. Selbsttest `scripts/check-sync.ts`.
 - Weitere Schlüssel kommen aus der Umgebung: `UNSPLASH_ACCESS_KEY`, `MAMMOUTH_API_KEY`, `OPENAI_API_KEY`, `IMAGE_MODEL`.
 
 ## Gestaltungskurs
@@ -74,7 +77,7 @@ Der Nutzer lehnt den „KI-Look“ ab. Gestaltet wird zurückhaltend: flach, lin
 ## Sync und Release
 
 - `sync:linux` übernimmt per `git archive` nur den committeten HEAD von `~/deckwerk`, nie dessen Arbeitsverzeichnis (dort liegt Unfertiges anderer Sessions).
-- Mac-eigene Dateien sind vom Sync ausgenommen (Liste in `scripts/sync-linux.sh`): README, diese CLAUDE.md, `install.sh`, `.github`, `assets/icon-mac.png`, einige Skripte.
-- `scripts/macify.mjs` patcht nur noch package.json (Build-Konfiguration, Version) und Texte (Strg→⌘, F5→⌥⌘P, Dateimanager→Finder). Laufzeitverhalten für macOS steht upstream per `process.platform`. „Ankerstelle fehlt“ heißt: upstream hat den Text verschoben, Anker in `macify.mjs` nachziehen.
+- Mac-eigene Dateien sind vom Sync ausgenommen (Liste in `scripts/sync-linux.sh`): README, diese CLAUDE.md, `install.sh`, `.github`, `assets/icon-mac.png`, einige Skripte. `website/` (Projektseite der Linux-Version) holt der Sync ebenfalls nicht.
+- `scripts/macify.mjs` patcht nur noch package.json (Build-Konfiguration, Version) und Texte (Strg→⌘, Entf→⌫, Umschalt→⇧, F5→⌥⌘P, Dateimanager→Finder). Laufzeitverhalten für macOS steht upstream per `process.platform`. „Ankerstelle fehlt“ heißt: upstream hat den Text verschoben, Anker in `macify.mjs` nachziehen.
 - Die Mac-Version (`pkg.version` in `macify.mjs`) ist unabhängig von Linux; vor einem Tag erhöhen.
 - Nicht lokal bauen (Rechner zu schwach), nie in `~/deckwerk` bauen. Nach dem Sync pushen und den Lauf mit `gh run watch` verfolgen.
