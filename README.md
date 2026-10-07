@@ -1,6 +1,6 @@
 # Deckwerk für macOS
 
-KI-Präsentationsstudio für den Mac. Ein Satz genügt: Deckwerk schreibt die Storyline, baut die Folien und prüft jede einzelne als Bild. Danach gestaltest du frei weiter wie in Canva und exportierst nach PowerPoint, PDF oder als Bilder.
+KI-Präsentationsstudio für den Mac. Ein Satz genügt: Deckwerk schreibt die Storyline, baut die Folien und prüft jede einzelne als Bild. Danach gestaltest du frei weiter wie in Canva und exportierst nach PowerPoint, Word, PDF oder als Bilder.
 
 Das ist die macOS-Ausgabe (Apple Silicon) von [Deckwerk](https://github.com/Bavarianator/deckwerk) für Linux.
 
@@ -8,10 +8,11 @@ Das ist die macOS-Ausgabe (Apple Silicon) von [Deckwerk](https://github.com/Bava
 
 - **Aus einem Satz ein Deck**: Storyline mit Action Titles, passende Layouts, Diagramme und Animationen. Die KI rendert jede Folie und prüft sie auf Überlauf, Kontrast und Aufbau.
 - **Aus vorhandenem Material**: Datei auf den Startbildschirm ziehen (TXT, MD, CSV, JSON, DOCX, PPTX, PDF). Bei PPTX kommen auch die Bilder je Folie mit.
+- **Eigene Bilder und Logos**: Fotos, Screenshots und Logos (PNG, JPG, WebP, GIF, SVG) mit anhängen, auch mehrere Dateien auf einmal. Abbildungen aus PDF, Word und PowerPoint kommen mit. Die KI sieht sich jedes Bild an, setzt Fotos auf die passende Folie und ein Logo auf Titel- und Schlussfolie.
 - **Frei gestalten**: Text, Formen, Fotos, Icons, Diagramme, QR-Codes, Video und Audio direkt auf der Folie. Einrasten, Gruppieren, Ebenen, Zuschnitt, Freisteller für Fotos, Farben eines Decks mit einem Klick umfärben, Layout-Folien in freie Elemente umwandeln.
-- **Ein Look für alles**: Themes, eigene Designs von der KI, Formate von 16:9 und 4:3 über Quadrat, 4:5 und Story (9:16) bis A4 und Link-Vorschau, dazu ein Hausstil, den sich die KI dauerhaft merkt.
+- **Ein Look für alles**: Themes, eigene Designs von der KI, Formate von 16:9 und 4:3 über Quadrat, 4:5 und Story (9:16) bis A4 und Link-Vorschau (Layouts, Schriftgrößen und Lint passen sich dem Format an), ein Brand-Kit für jedes neue Deck und ein Hausstil, den sich die KI dauerhaft merkt.
 - **Präsentieren**: Vollbild, Referentenansicht mit Notizen und Zeit, Laserpointer und Stift, Handy als Fernbedienung über das WLAN.
-- **Export**: PowerPoint (.pptx) mit echten, bearbeitbaren Objekten und Animationen, PDF, PNG je Folie, Handout (Markdown).
+- **Export**: PowerPoint (.pptx) mit echten, bearbeitbaren Objekten und Animationen, Word (.docx) mit bearbeitbarem Text, PDF, PNG je Folie, ZIP (alle Bilder plus PDF), Handout (Markdown). Für A4 zusätzlich ein Druck-PDF mit Beschnitt.
 - **Auch aus Claude Code, Codex und Vibe**: Deckwerk ist zugleich ein MCP-Server. Deine Agenten bauen und bearbeiten Decks dann direkt aus dem Terminal.
 
 ## Voraussetzungen
@@ -21,7 +22,7 @@ Das ist die macOS-Ausgabe (Apple Silicon) von [Deckwerk](https://github.com/Bava
 - Für die KI eins davon:
   - der Login eines **Agenten-CLIs**: Claude Code (`claude`), Codex (`codex`) oder Mistral Vibe (`vibe`), installiert und angemeldet. Dann ist kein API-Key nötig.
   - ein **Anthropic-API-Key** (`sk-ant-…`).
-- Optional: `brew install poppler` für den PDF-Import.
+- Optional: `brew install poppler` für den PDF-Import (Text und Abbildungen aus PDFs).
 
 ## Installation
 
@@ -62,12 +63,17 @@ Selbst gebaut startet die App ohne Rückfrage. `npm run dist` baut stattdessen e
 
 ## Erster Start
 
-Ein Einrichtungsassistent führt durch die Einrichtung (jederzeit überspringbar):
+Ein Einrichtungsassistent führt durch die Einrichtung (jederzeit überspringbar): Willkommen, KI-Zugang, Fertig.
 
-1. **KI-Zugang**: Deckwerk findet Claude Code, Codex und Vibe von selbst. Der Chat läuft über den Login des ersten gefundenen, bei mehreren wählst du per Klick. Ohne CLI trägst du einen Anthropic-API-Key ein; er liegt verschlüsselt über den macOS-Schlüsselbund auf deinem Mac und hat Vorrang.
-2. **Modell**: Das Modell bestimmt auch, worüber der Chat läuft: Claude (Opus 5.5, Fable 5.1, Sonnet 5, Haiku 4.5), die Modelle aus deiner Vibe-Einstellung oder aus dem Codex-Katalog. Umschalten geht später jederzeit im Chat.
-3. **Agenten**: Ein Klick trägt Deckwerk als MCP-Server in Claude Code, Codex und Vibe ein, einzeln oder in alle gefundenen zugleich.
-4. **Testen**: Eine kurze Probeanfrage zeigt, dass alles läuft.
+1. **KI-Zugang**: Deckwerk findet Claude Code, Codex und Vibe von selbst. Der Chat läuft über den Login des ersten gefundenen, bei mehreren wählst du per Klick. Ohne Zugang zeigt der Assistent drei Wege Schritt für Schritt: **Claude-Abo** (Claude Code per nativem Installer), **ChatGPT-Abo** (Codex) oder **Anthropic-API-Key**. Ein frisch installiertes CLI erkennt Deckwerk von selbst. Einen Key prüft Deckwerk vor dem Speichern bei Anthropic; er liegt verschlüsselt über den macOS-Schlüsselbund auf deinem Mac und hat Vorrang.
+2. **Mehr Einstellungen** (optional) ergänzt:
+   - **Modell**: Es bestimmt auch, worüber der Chat läuft: Claude (Opus 5.5, Fable 5.1, Sonnet 5, Haiku 4.5), die Modelle aus deiner Vibe-Einstellung oder aus dem Codex-Katalog. Umschalten geht später jederzeit im Chat.
+   - **Agenten**: Ein Klick trägt Deckwerk als MCP-Server in Claude Code, Codex und Vibe ein, einzeln oder in alle gefundenen zugleich.
+   - **Testen**: Eine kurze Probeanfrage zeigt, dass alles läuft.
+   - **Bilder**: Zugang für KI-Bilder (siehe „Mit der KI arbeiten“).
+   - **Cloud**: Abgleich über WebDAV (siehe „Cloud-Sync“).
+
+Die Einrichtung erreichst du später über das Zahnrad.
 
 Danach steht Deckwerk in Launchpad und Spotlight (⌘ Leertaste → „Deckwerk“). Ins Dock: Rechtsklick auf das Dock-Symbol → Optionen → Im Dock behalten.
 
@@ -89,6 +95,8 @@ Danach steht Deckwerk in Launchpad und Spotlight (⌘ Leertaste → „Deckwerk�
 
 Beim Präsentieren: → / Leertaste weiter, ← zurück, P Referentenansicht, L Laserpointer, D Stift, E Zeichnungen löschen, Esc beenden.
 
+Quellmaterial und eigene Bilder hängst du über „Datei“ an oder ziehst sie ins Eingabefeld, auch mehrere Dateien. Die Bilder landen in `~/Deckwerk/assets/`, Abbildungen aus Dokumenten unter `assets/import-<name>/`. Für Abbildungen aus PDFs braucht Deckwerk `pdfimages` aus demselben Poppler-Paket wie `pdftotext` (`brew install poppler`).
+
 Bilder lassen sich aus dem Finder direkt auf die Folie ziehen. Ein Klick auf ein Element öffnet eine KI-Leiste für Wünsche genau zu diesem Element.
 
 ## Mit der KI arbeiten
@@ -101,8 +109,10 @@ Bilder lassen sich aus dem Finder direkt auf die Folie ziehen. Ein Klick auf ein
 
   Angeboten wird nur, was installiert ist. Die Wahl gilt ab der nächsten Nachricht und bleibt gespeichert. Wechselst du den Anbieter, beginnt ein neues Gespräch; das Deck bleibt. Vibe und Codex antworten spürbar langsamer als Claude.
 - Unter den Notizen schreibt „Schreiben lassen“ die Sprechernotizen, „Überarbeiten“ verbessert vorhandene. Daneben steht die geschätzte Sprechzeit.
+- **Brand-Kit:** Im Look-Dialog „Als Standard speichern“ legt Farben, Schriften und Logo (auch eines für dunklen Grund) in `~/Deckwerk/brand.json` ab. Jedes Deck, das die KI neu anlegt, bekommt die Marke automatisch, das Logo steht auf Titel- und Schlussfolie, bei A4 auf Seite 1 (kein Wasserzeichen auf jeder Folie); „Standard übernehmen“ wendet sie auf ein bestehendes Deck an.
 - **Hausstil:** Sag „merk dir …“, und die KI trägt die Vorliebe in `~/Deckwerk/hausstil.md` ein. Die Datei gilt für jedes künftige Deck und lässt sich von Hand bearbeiten.
 - **Fotos:** Die KI nutzt zuerst deine Bilder aus `~/Deckwerk/assets`. Findet sie dort nichts Passendes und ist `UNSPLASH_ACCESS_KEY` gesetzt, sucht sie auf Unsplash und übernimmt den Bildnachweis in die Notizen.
+- **KI-Bilder:** Die KI kann Bilder auch selbst erzeugen, mit `gpt-image-2` über [Mammouth](https://mammouth.ai) oder OpenAI, ohne Key auch über Codex mit deinem ChatGPT-Login (einmal `codex login`). Eingerichtet wird das unter Zahnrad → Einrichtung → **Bilder**: Keys (verschlüsselt gespeichert), bevorzugter Anbieter und Modell, z. B. `gemini-3-pro-image-preview` bei Mammouth. Ohne Vorgabe nimmt die KI den ersten eingerichteten Anbieter in der Reihenfolge Mammouth, OpenAI, Codex; „mach das Bild mit Codex“ wählt gezielt. Alternativ gelten `MAMMOUTH_API_KEY`, `OPENAI_API_KEY` und `IMAGE_MODEL` aus der Umgebung. Die Bilder landen in `~/Deckwerk/assets`.
 
 ## Speichern und Versionen
 
@@ -112,6 +122,20 @@ Höchstens alle 10 Minuten legt Deckwerk den vorigen Stand unter `<deck>/version
 
 Ein Deck-Ordner lässt sich weitergeben: Bildpfade relativ zur deck.json (`assets/foto.jpg`) löst Deckwerk beim Öffnen auf.
 
+## Exportieren
+
+**Exportieren** erzeugt PowerPoint, Word (eine Seite pro Folie: Text in bearbeitbaren Textfeldern mit eingebetteten Schriften, Fotos, Flächen und Diagramme als Hintergrundbild), PDF, PNG (eine Datei pro Folie), ein ZIP (alle Bilder plus PDF) oder ein Handout (Markdown mit Notizen). Bei Nicht-16:9 steht das Format im Dateinamen (`-4x5`, `-a4`). Die Dateien landen im Ordner des Decks.
+
+**Formate:** „Exportieren“ → „Anderes Format …“ rechnet das Deck auf ein anderes Format um oder legt Kopien in weiteren Formaten an: 16:9, 4:3, Quadrat, 4:5, Story 9:16, A4 hoch oder quer, Link-Vorschau. Freie Elemente wandern mit, Layouts ordnen sich neu an: Hoch- und Quadratformate stapeln Bild und Text, Social-Formate setzen größere Schrift, A4 kleinere. Der Lint rechnet je Format mit eigenen Grenzen (Social bis 30, A4 bis 350 Wörter je Seite). Für A4 gibt es die Layouts „Fließtext“, „Angebot“, „Flyer“ und „Flyer-Rückseite“; ein QR-Code braucht eine vollständige URL (`https://`, `mailto:`, `tel:`). Der Lint warnt bei Fotos, die für den Druck zu klein sind (unter 250 ppi).
+
+Bei A4-Decks gibt es zusätzlich „PDF für die Druckerei …“. Die Datei (`…-druck.pdf`) hat Endformat plus Beschnitt (Standard 3 mm, wählbar je Druckerei: Flyeralarm 1 mm, Saxoprint/Onlineprinters 2 mm, WIRmachenDRUCK 3 mm), keine Schnittmarken; randabfallende Fotos laufen gespiegelt in den Beschnitt. Das Endformat A3, A4 oder A5 ist wählbar. Die Farben bleiben RGB: Die genannten Druckereien wandeln selbst nach CMYK, leuchtende Akzente werden dabei etwas matter (print24 verlangt CMYK). Bei großer Auflage lohnt ein Probedruck. Die Seitenzahl muss zur Bestellung passen (1 oder 2), lösche nicht gewählte Entwürfe vorher.
+
+## Cloud-Sync
+
+Unter Einrichtung → Mehr Einstellungen → Cloud verbindest du Deckwerk mit einem WebDAV-Speicher, etwa Nextcloud, ownCloud, pCloud, Koofr, Box, einer Synology oder MagentaCLOUD. Bei Nextcloud reicht die Server-Adresse. Nutze dort ein App-Passwort (Einstellungen → Sicherheit). Deckwerk spiegelt dann `~/Deckwerk` in den Ordner `Deckwerk/` deiner Cloud: beim Start, 5 Sekunden nach jedem Speichern und per Klick auf die Wolke in der Kopfleiste.
+
+Versionen, Exporte und das Freisteller-Modell bleiben lokal. Hast du dasselbe Deck auf zwei Geräten geändert, gewinnt die neuere Fassung. Die ältere landet in `versions/` und lässt sich von dort wiederherstellen. Gelöschte Dateien werden auch auf den anderen Geräten gelöscht.
+
 ## Wo deine Daten liegen
 
 | Ort | Inhalt |
@@ -120,15 +144,18 @@ Ein Deck-Ordner lässt sich weitergeben: Bildpfade relativ zur deck.json (`asset
 | `~/Deckwerk/<titel>/versions/` | Frühere Stände eines Decks |
 | `~/Deckwerk/assets/` | Eigene, eingefügte und freigestellte Bilder, geladene Fotos |
 | `~/Deckwerk/hausstil.md` | Hausstil für alle Decks |
+| `~/Deckwerk/brand.json` | Brand-Kit (Farben, Schriften, Logo) für neue Decks |
 | `~/Deckwerk/models/` | Modell für den Freisteller (rund 200 MB, lädt beim ersten Einsatz von Hugging Face) |
-| `~/Library/Application Support/Deckwerk/` | Einstellungen und der verschlüsselte API-Key |
+| `~/Deckwerk/.sync-state.json` | Stand des letzten Cloud-Abgleichs |
+| `~/Library/Application Support/Deckwerk/` | Einstellungen, dazu verschlüsselt API-Key, Bild-KI-Keys und Cloud-Zugang |
 
 Updates lassen alles davon unangetastet.
 
 ## Datenschutz und Sicherheit
 
-- **Was an die KI geht:** Deine Wünsche, der Inhalt des Decks, angehängtes Quellmaterial und gerenderte Folienbilder gehen an den Anbieter deines KI-Zugangs: Anthropic (API oder Claude Code), OpenAI (Codex) oder Mistral (Vibe). Bei einer Web-Recherche ruft die KI Webseiten ab.
+- **Was an die KI geht:** Deine Wünsche, der Inhalt des Decks, angehängtes Quellmaterial (auch Vorschauen deiner Bilder) und gerenderte Folienbilder gehen an den Anbieter deines KI-Zugangs: Anthropic (API oder Claude Code), OpenAI (Codex) oder Mistral (Vibe). Bei einer Web-Recherche ruft die KI Webseiten ab.
 - **Chat über Claude Code, Codex oder Vibe:** Das CLI bekommt nur die Deckwerk-Werkzeuge (dazu Web-Recherche), keine Shell und keine Dateiwerkzeuge. Ein präpariertes Quelldokument kann so keine Befehle auf deinem Mac ausführen.
+- **Cloud-Sync:** Nur wenn du ihn einrichtest. Decks und Bilder gehen dann an deinen WebDAV-Server. Das App-Passwort liegt verschlüsselt im macOS-Schlüsselbund. Nutze eine `https://`-Adresse.
 - **Was lokal bleibt:** Freisteller, Rendering und Export laufen auf deinem Mac.
 - **Fremde Decks:** Decks binden nur Bilder (PNG, JPEG, GIF, WebP, SVG, AVIF, BMP), Video, Audio und Schriften ein. Andere Dateien verweigert Deckwerk. So kann ein fremdes Deck keine privaten Dateien in einen Export ziehen.
 - **App-Fenster:** Alle Fenster laufen in der Chromium-Sandbox und können nicht auf fremde Seiten wechseln.
@@ -173,7 +200,7 @@ Decks landen unter `~/Deckwerk/<titel>/deck.json`. Die Umgebungsvariable `DECKWE
 | macOS meldet „Schadsoftware“ und verschiebt die App in den Papierkorb | Fehlalarm von XProtect, bekannt bei nicht notarisierten Electron-Apps unter macOS 27. Dauerhaft hilft nur die Notarisierung (siehe unten). |
 | Chat antwortet nicht, Claude Code, Codex oder Vibe wird nicht gefunden | Deckwerk sucht die CLIs in `/opt/homebrew/bin`, `/usr/local/bin` und `~/.local/bin`. Einmal im Terminal starten und anmelden (`claude`, `codex login`, `vibe --setup`), oder einen API-Key eintragen. |
 | „Codex ist nicht angemeldet“ | Im Terminal `codex login` ausführen. |
-| „PDF lesen braucht pdftotext“ | `brew install poppler` |
+| „PDF lesen braucht pdftotext“, oder Abbildungen aus PDFs fehlen (`pdfimages`) | `brew install poppler` |
 | Handy-Fernbedienung verbindet nicht | Beim ersten Mal fragt macOS, ob Deckwerk eingehende Verbindungen annehmen darf: „Erlauben“. Handy und Mac müssen im selben WLAN sein. |
 | Freisteller braucht beim ersten Mal lange | Er lädt einmalig das Modell (rund 200 MB). Danach rechnet er lokal per CoreML auf Neural Engine und GPU. |
 
@@ -197,7 +224,7 @@ GitHub baut die App bei jedem Push auf einem Apple-Silicon-Mac (`.github/workflo
 
 - Signatur, und ob Gatekeeper die App als notarisiert erkennt
 - Fenster startet (Screenshot als Artefakt „Pruefung“)
-- Export eines Beispiel-Decks nach PPTX, PDF und PNG
+- Export eines Beispiel-Decks nach PPTX, Word, PDF, ZIP und PNG, dazu die Flyer-Vorlage direkt aus dem Paket samt Druck-PDF
 - MCP-Server antwortet, natives onnxruntime lädt
 - der curl-Installer gegen das eben veröffentlichte Release
 
@@ -216,9 +243,9 @@ Das Verhalten auf dem Mac steckt per `process.platform` im gemeinsamen Code: `PA
 `scripts/macify.mjs` erledigt nur noch, was ausschließlich den Mac-Build betrifft, und ist idempotent:
 
 - `package.json`: DMG-Build für arm64 mit electron-builder, ad-hoc signiert ohne Hardened Runtime (mit Developer-ID-Secrets signiert und notarisiert der CI-Build), im Paket nur die Laufzeit-Module (`ajv`, `onnxruntime-node` mit arm64-Binärdateien), Info.plist-Text für das lokale Netzwerk, eigene Versionsnummer, keine X11-Flags.
-- Anzeigen: ⌘ statt Strg, ⌥⌘P statt F5, „Finder“ statt „Dateimanager“.
+- Anzeigen: ⌘ statt Strg, ⌫ statt Entf, ⇧ statt Umschalt, ⌥⌘P statt F5, „Finder“ statt „Dateimanager“.
 
-Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, und den Linux-Installer `scripts/install.sh` holt er gar nicht erst, `.github/`, `assets/icon-mac.png`, `scripts/deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
+Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, und den Linux-Installer `scripts/install.sh` sowie `website/` (Projektseite der Linux-Version) holt er gar nicht erst, `.github/`, `assets/icon-mac.png`, `scripts/deckwerk.sh`, `open.mjs`, `verify-pptx.ts`, `spike-embed-fonts.ts`.
 
 ### Skripte
 
@@ -227,7 +254,7 @@ Mac-eigene Dateien überschreibt der Sync nicht: README, LICENSE, `install.sh`, 
 | `npm run dev` | App im Entwicklungsmodus |
 | `npm run install:mac` | App bauen und nach `/Applications` legen |
 | `npm run dist` | DMG nach `dist/` bauen |
-| `npm run render examples/pitch.json` | Deck rendern → `exports/<slug>.pptx`, `.pdf`, `<slug>/NN.png` plus Lint-Report |
+| `npm run render examples/pitch.json` | Deck rendern → `exports/<slug>.pptx`, `.docx`, `.pdf`, `.zip`, `<slug>/NN.png` (bei A4 zusätzlich `-druck.pdf`) plus Lint-Report |
 | `npm run check:layouts` | Stresstest: jedes Layout × Variante × Sample × Theme |
 | `npm run smoke` | Agent-Tools und MCP-Server gegen eine Mock-Engine (ohne Electron, ohne API-Key) |
 | `npm run mcp:e2e` | MCP-Server end-to-end gegen die echte Engine |

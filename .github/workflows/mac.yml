@@ -44,7 +44,7 @@ jobs:
           fi
 
       # Das fertige Paket prüfen, nicht den Quellcode: Signatur, natives onnxruntime (Freisteller),
-      # MCP-Server (lädt ajv aus node_modules), App-Fenster (Screenshot) und Export (PPTX/PDF/PNG)
+      # MCP-Server (lädt ajv aus node_modules), App-Fenster (Screenshot) und Export (PPTX/DOCX/PDF/ZIP/PNG, Druck-PDF)
       - name: Paket prüfen
         run: |
           APP=dist/mac-arm64/Deckwerk.app; BIN="$APP/Contents/MacOS/Deckwerk"
@@ -63,10 +63,11 @@ jobs:
           DW_SHOT="$PWD/check/fenster.png" DW_SHOT_DELAY=8000 run 120 "$BIN"
           test -s check/fenster.png || exit 1; echo "Fenster ok"
           run 600 "$BIN" --render examples/pitch.json --out check/render
-          ls check/render/*.pptx check/render/*.pdf check/render/*/01.png || exit 1; echo "Export ok"
+          ls check/render/*.pptx check/render/*.docx check/render/*.pdf check/render/*.zip check/render/*/01.png || exit 1; echo "Export ok"
           # Vorlage aus dem Paket (app.asar) rendern: sind examples/ und ihre Fotos in der installierten App erreichbar?
-          run 600 "$BIN" --render "$APP/Contents/Resources/app.asar/examples/foto.json" --out check/vorlage
-          ls check/vorlage/*/01.png || exit 1; echo "Vorlagen im Paket ok"
+          # Der Flyer ist A4, dafür entsteht zusätzlich das Druck-PDF mit Beschnitt (pdf-boxes.ts)
+          run 600 "$BIN" --render "$APP/Contents/Resources/app.asar/examples/flyer.json" --out check/vorlage
+          ls check/vorlage/*/01.png check/vorlage/*-druck.pdf || exit 1; echo "Vorlagen im Paket ok, Druck-PDF ok"
 
       - uses: actions/upload-artifact@v4
         if: always()
