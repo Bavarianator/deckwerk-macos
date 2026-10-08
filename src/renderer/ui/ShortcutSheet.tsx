@@ -16,7 +16,7 @@ const GROUPS: { name: string; keys: [string, string][] }[] = [
   { name: 'Elemente', keys: [
     ['Klick', 'Auswählen'], ['⇧Klick', 'Zur Auswahl hinzufügen'], ['Rahmen aufziehen', 'Mehrere auswählen'], ['⌘A', 'Alle auswählen'],
     ['Tab / ⇧Tab', 'Nächstes / voriges Element'], ['Pfeiltasten', 'Verschieben (mit ⇧ 10 px)'],
-    ['⇧ beim Ziehen', 'Nur waagerecht oder senkrecht'], ['⌥ beim Ziehen', 'Kopie ziehen'], ['⌘ beim Ziehen', 'Ohne Einrasten'],
+    ['⇧ beim Ziehen', 'Nur waagerecht oder senkrecht'], ['⌥ beim Ziehen', 'Ohne Einrasten'],
     ['⇧ an einer Ecke', 'Seitenverhältnis frei bzw. fest'], ['⇧ beim Drehen', 'In 15°-Schritten'],
     ['Doppelklick', 'Text bearbeiten, Bild zuschneiden, in Gruppe wählen'], ['Enter', 'Text bearbeiten'], ['Esc', 'Auswahl aufheben'],
     ['⌫', 'Löschen'], ['⌘C / ⌘X', 'Kopieren / Ausschneiden'], ['⌘D', 'Duplizieren'], ['⌘G', 'Gruppieren'],
