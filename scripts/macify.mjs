@@ -47,6 +47,9 @@ for (const f of walk('src/renderer').filter((f) => /\.tsx?$/.test(f))) {
   const s = readFileSync(f, 'utf8')
   // Strg+Alt+T steht nur im Linux-Zweig (Terminal öffnen) und bleibt; „Strg + −)“ aus den Zoom-Titeln wird „⌘−)“
   const t = s.replace(/Strg\+(⇧\+|Umschalt\+)/g, '⌘⇧').replace(/Strg\+(?!Alt)(\S)/g, '⌘$1').replace(/Strg \+ (\S\))/g, '⌘$1').replaceAll('<kbd>Entf</kbd>', '<kbd>⌫</kbd>').replaceAll('(Umschalt: ', '(⇧: ').replaceAll('aus dem Dateimanager', 'aus dem Finder').replaceAll('<kbd>Strg</kbd>', '<kbd>⌘</kbd>').replaceAll('(F5)', '(⌥⌘P)').replaceAll('<kbd>F5</kbd>', '<kbd>⌥⌘P</kbd>')
+    // Kürzelübersicht (ShortcutSheet), Stil kopieren (Strg+Alt+C/V), Suchleiste (Umschalt+Enter); e.key === 'F5' im Code bleibt
+    .replace(/Strg\+Alt\+([CV])\b/g, '⌥⌘$1').replaceAll("['F5',", "['⌥⌘P',").replaceAll("['Umschalt+F5',", "['⌥⇧⌘P',").replaceAll('Umschalt+', '⇧')
+    .replaceAll("['Entf',", "['⌫',").replaceAll('(mit Umschalt ', '(mit ⇧ ').replace(/'(Umschalt|Alt|Strg) (beim|an) /g, (_, k, w) => `'${{ Umschalt: '⇧', Alt: '⌥', Strg: '⌘' }[k]} ${w} `)
   if (t !== s) writeFileSync(f, t)
 }
 // X11-Flag (nur Linux/Wayland) überall entfernen, wo Electron gestartet wird

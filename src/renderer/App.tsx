@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import '@fontsource-variable/inter'
 import './ui/app.css'
 import './ui/shell.css'
-import { FORMATS, profileOf, type Deck, type PrintOptions, type FormatId, type Item, type Slide } from '../shared/deck'
+import { FORMATS, profileOf, sizeOf, type Deck, type Size, type PrintOptions, type FormatId, type Item, type Slide } from '../shared/deck'
 import { newId, resizeDeck } from '../shared/items'
 import { LAYOUTS, type LayoutId } from '../shared/layouts'
 import { THEMES } from '../shared/themes'
@@ -12,6 +12,7 @@ import type { Target } from './ui/AskBar'
 import { BuildView, type StoryItem } from './ui/BuildView'
 import { ChatChoices, type Msg } from './ui/Chat'
 import { EditorScreen } from './ui/EditorScreen'
+import { FindBar } from './ui/FindBar'
 import { KeyDialog } from './ui/KeyDialog'
 import { Logo } from './ui/Logo'
 import { FormatSheet } from './ui/FormatSheet'
@@ -19,6 +20,8 @@ import { PrintSheet } from './ui/PrintSheet'
 import { LookSheet } from './ui/LookSheet'
 import { PresentScreen } from './ui/PresentScreen'
 import { SetupSheet } from './ui/SetupSheet'
+import { Settings } from './ui/settings/Settings'
+import { OpenSettings, type SectionId } from './ui/settings/parts'
 import { Start } from './ui/Start'
 import { Overview } from './ui/Overview'
 import { TopBar, type Panel, type Status, type View } from './ui/TopBar'
@@ -30,6 +33,8 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).rep
 // local = Änderung kam aus der UI und muss an Main/Agent; Agent-Änderungen sind dort schon bekannt.
 interface Doc { deck: Deck | null; past: Deck[]; future: Deck[]; tag?: string; local?: boolean }
 const fresh = (deck: Deck | null): Doc => ({ deck, past: [], future: [] })
+// Folien-Zwischenablage: gilt für die Sitzung, auch nach Deckwechsel; size = Format der Quelle zum Umrechnen beim Einfügen
+const slideClip: { slides: Slide[]; size: Size } = { slides: [], size: sizeOf(null) }
 
 export default function App() {
   const [doc, setDoc] = useState<Doc>(fresh(null))
@@ -46,9 +51,11 @@ export default function App() {
   const [nav, setNav] = useState(true) // Folienübersicht links
   const [panel, setPanel] = useState<Panel>(null) // rechts: Einfügen oder Anpassen
   const [look, setLook] = useState(false)
-  const [setup, setSetup] = useState<boolean | string>(false) // Einrichtung: beim ersten Start von selbst (state().setupDone), sonst über das Zahnrad; Text = Schritt, mit dem sie aufgeht
+  const [setup, setSetup] = useState<boolean | string>(false) // Einrichtung: nur beim ersten Start von selbst (state().setupDone); Text = Schritt, mit dem sie aufgeht
+  const [settings, setSettings] = useState<SectionId | null>(null) // Einstellungen: Zahnrad, Wolke, Key-Dialog, „Alle Einstellungen“ im Assistenten
   const [formats, setFormats] = useState(false)
   const [printing, setPrinting] = useState(false) // Sheet „PDF für die Druckerei“
+  const [find, setFind] = useState<{ replace: boolean; n: number } | null>(null) // Suchen & Ersetzen; n zählt ⌘F/H zum Neufokussieren
   const [view, setView] = useState<View>('slide') // einzelne Folie oder Übersicht aller Folien
   const [target, setTarget] = useState<Target | null>(null) // gewähltes Element als Bezug für die KI-Leiste
   const [story, setStory] = useState<StoryItem[] | null>(null) // geplante Storyline der KI (plan_storyline)
@@ -66,6 +73,9 @@ export default function App() {
     try { localStorage.setItem('dw.chat', id) } catch { /* ohne Speicher gilt die Wahl nur bis zum Neustart */ }
   }, [])
   const loadChoices = useCallback(() => api.chatModels().then(setChoices, () => {}), [])
+  // KI-Zugang geändert (Key, Login, Logout): ob Senden geht und welche Modelle zur Wahl stehen
+  const reloadAccess = useCallback(() => { void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }, [])
+  const openSettings = useCallback((s?: SectionId) => setSettings(s ?? 'ki'), [])
   useEffect(() => { void loadChoices() }, [])
   // Gewähltes Modell hier nicht verfügbar (z. B. Vibe deinstalliert, nur Vibe da): automatisch das erste verfügbare
   useEffect(() => { if (choices && pickAvailable(model, choices) !== model) pickModel(pickAvailable(model, choices)) }, [choices])
@@ -177,6 +187,25 @@ export default function App() {
     })
     setSel(i + 1)
   }, [commit])
+  // Kopieren in Deck-Reihenfolge; Einfügen ist ein Undo-Schritt und zeigt die erste eingefügte Folie
+  const copySlides = useCallback((idx: number[]) => {
+    if (!deck) return
+    slideClip.slides = structuredClone([...idx].sort((a, b) => a - b).flatMap((i) => deck.slides[i] ?? []))
+    slideClip.size = sizeOf(deck)
+  }, [deck])
+  const pasteSlides = useCallback((at: number) => {
+    const { slides: clip, size } = slideClip
+    if (!clip.length) return 0
+    commit((d) => {
+      const slides = [...d.slides]
+      const fit = resizeDeck({ ...d, size, slides: clip }, sizeOf(d)).slides // anderes Format: freie Elemente umrechnen
+      slides.splice(at, 0, ...structuredClone(fit).map((s) => ({ ...s, id: `s-${newId()}` }))) // Elemente behalten ihre IDs wie bei dupSlide
+      return { ...d, slides }
+    })
+    setSel(at)
+    return clip.length
+  }, [commit])
+  const canPaste = useCallback(() => slideClip.slides.length > 0, [])
   const delSlide = useCallback((i: number) => commit((d) => ({ ...d, slides: d.slides.filter((_, j) => j !== i) })), [commit])
   const onMove = useCallback((from: number, to: number) => {
     commit((d) => {
@@ -270,8 +299,12 @@ export default function App() {
       const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
       if (mod && k === 's') deck && actions.onSave()
+      // auch beim Tippen: der Fokus wandert ins Suchfeld, bearbeiteter Folientext wird dabei per onBlur übernommen
+      else if (mod && !e.altKey && (k === 'f' || k === 'h') && deck && view === 'slide' && !document.querySelector('[aria-modal="true"]'))
+        setFind((f) => ({ replace: k === 'h', n: (f?.n ?? 0) + 1 }))
       else if (e.key === '/' && !typing && !mod) document.querySelector<HTMLInputElement>('.cap input')?.focus() // Wunsch an die KI
       else if (e.key === 'Escape' && panel === 'insert') setPanel(null)
+      else if (e.key === 'Escape' && find && !typing && !picked.length && !document.querySelector('[aria-modal="true"]')) setFind(null) // Fokus liegt nicht in der Suchleiste; bei Auswahl hebt Esc erst die Auswahl auf (Stage)
       else if (mod && k === 'z' && !typing && !busy) e.shiftKey ? redo() : undo()
       else if (mod && k === 'y' && !typing && !busy) redo()
       else if ((e.key === 'F5' || (e.metaKey && e.altKey && e.code === 'KeyP')) && deck?.slides.length) present(e.shiftKey ? index : 0) // ⌥⌘P: Mac-Tastaturen brauchen für F5 fn
@@ -298,14 +331,15 @@ export default function App() {
 
   return (
     <ChatChoices.Provider value={choices}>
+    <OpenSettings.Provider value={openSettings}>
     <div className="app">
       {home ? (
         <Start
           onSubmit={send} model={model} onModel={pickModel}
-          onOpen={actions.onOpen} onOpenPath={actions.onOpenPath} onKey={() => setSetup(true)}
-          onBlank={() => {
+          onOpen={actions.onOpen} onOpenPath={actions.onOpenPath} onKey={() => openSettings()}
+          onBlank={(size) => {
             // leer beginnen wie in Canva: eine leere Folie, alles Weitere von Hand oder per KI
-            const d: Deck = { title: 'Neues Design', theme: { id: THEMES[0].id }, transition: 'fade', mode: 'click', slides: [{ id: `s-${newId()}`, layout: 'blank', content: {} }] }
+            const d: Deck = { title: 'Neues Design', theme: { id: THEMES[0].id }, transition: 'fade', mode: 'click', slides: [{ id: `s-${newId()}`, layout: 'blank', content: {} }], ...(size && { size }) }
             setDoc({ deck: d, past: [], future: [], local: true })
           }}
         />
@@ -340,10 +374,12 @@ export default function App() {
             canPrint={!!deck && profileOf(deck) === 'doc'}
             onPrint={() => setPrinting(true)}
             onPresent={() => present(0)}
+            onRestore={actions.onOpenPath}
           />
           {deck && view === 'grid' ? (
             <Overview
-              deck={deck} busy={busy} onMove={onMove} onDup={dupSlide} onDel={delSlide} onAsk={send}
+              deck={deck} index={index} busy={busy} onMove={onMove} onDup={dupSlide} onDel={delSlide} onCopy={copySlides} onPaste={pasteSlides} onAsk={send}
+              onHide={(idx, on) => commit((d) => ({ ...d, slides: d.slides.map((s, j) => (idx.includes(j) ? { ...s, hidden: on || undefined } : s)) }))}
               onOpen={(i) => { setSel(i); setView('slide') }}
             />
           ) : <EditorScreen
@@ -364,6 +400,9 @@ export default function App() {
             addSlide={addSlide}
             dupSlide={dupSlide}
             delSlide={delSlide}
+            copySlides={copySlides}
+            pasteSlides={pasteSlides}
+            canPaste={canPaste}
             patchSlide={patchSlide}
             pickImage={api.pickImage}
             nav={nav}
@@ -377,13 +416,17 @@ export default function App() {
         </>
       )}
       {home && status?.error && <div className="toast material" role="alert">{status.text}</div>}
+      {find && deck && !building && view === 'slide' && (
+        <FindBar deck={deck} index={index} busy={busy} replace={find.replace} focus={find.n} onJump={setSel} onReplace={commit} onClose={() => setFind(null)} />
+      )}
       {printing && deck && <PrintSheet deck={deck} onExport={(o) => actions.onExport('print', o)} onClose={() => setPrinting(false)} />}
       {formats && deck && <FormatSheet deck={deck} index={index} onApply={(id) => commit((d) => resizeDeck(d, id))} onCopies={saveCopies} onClose={() => setFormats(false)} />}
       {look && deck && <LookSheet deck={deck} busy={busy} patchDeck={patchDeck} pickImage={api.pickImage} onAsk={(t) => send(t)} onClose={() => setLook(false)} />}
-      {setup && <SetupSheet model={model} onModel={pickModel} start={typeof setup === 'string' ? setup : undefined} onKeySaved={() => { void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }} onClose={() => { setSetup(false); void api.state().then((s) => setHasKey(s.hasKey)); void loadChoices() }} />}
+      {setup && <SetupSheet model={model} onModel={pickModel} start={typeof setup === 'string' ? setup : undefined} onKeySaved={reloadAccess} onClose={() => { setSetup(false); reloadAccess() }} />}
+      {settings && <Settings section={settings} model={model} onModel={pickModel} onChanged={reloadAccess} onClose={() => { setSettings(null); reloadAccess() }} />}
       {askKey && (
         <KeyDialog
-          onSetup={() => { setAskKey(false); setSetup('KI-Zugang') }}
+          onSetup={() => { setAskKey(false); openSettings('ki') }}
           onClose={() => setAskKey(false)}
           onSave={async (key) => {
             await api.setApiKey(key).catch((e) => { throw new Error(errText(e)) })
@@ -393,6 +436,7 @@ export default function App() {
         />
       )}
     </div>
+    </OpenSettings.Provider>
     </ChatChoices.Provider>
   )
 }

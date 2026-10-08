@@ -34,6 +34,9 @@ interface Props {
   addSlide: (layout?: LayoutId, at?: number) => void
   dupSlide: (i: number) => void
   delSlide: (i: number) => void
+  copySlides: (idx: number[]) => void
+  pasteSlides: (at: number) => number
+  canPaste: () => boolean
   patchSlide: (i: number, p: Partial<Slide>, tag?: string) => void
   pickImage: () => Promise<string | null>
   nav: boolean
@@ -92,7 +95,7 @@ export function EditorScreen(p: Props) {
     <div className="work">
       {p.nav && p.deck && (
         <aside className="work-nav" aria-label="Folienübersicht">
-          <Filmstrip deck={p.deck} sel={p.index} disabled={p.busy} onSelect={p.onSelect} onMove={p.onMove} onAdd={() => p.addSlide()} onDup={p.dupSlide} onDel={p.delSlide} />
+          <Filmstrip deck={p.deck} sel={p.index} disabled={p.busy} onSelect={p.onSelect} onMove={p.onMove} onAdd={(at) => p.addSlide('blank', at)} onDup={p.dupSlide} onDel={p.delSlide} onHide={(i) => p.patchSlide(i, { hidden: !p.deck!.slides[i].hidden || undefined })} onCopy={p.copySlides} onPaste={p.pasteSlides} canPaste={p.canPaste} />
         </aside>
       )}
       <div className="work-center" onPointerDownCapture={(e) => { if ((e.target as HTMLElement).closest('.stage-canvas')) setDragging(true) }}>
@@ -108,6 +111,7 @@ export function EditorScreen(p: Props) {
             onPatch={(q, tag) => patchItem(item.id, q, tag)}
             onMore={() => p.onPanel('format')}
             onAsk={() => document.querySelector<HTMLInputElement>('.cap input')?.focus()}
+            onRewrite={(text) => p.onSend(`${t.label}: ${text}`, t.context)}
           />
         )}
         <Stage deck={p.deck} index={p.index} busy={p.busy} sel={p.picked} onSel={p.onPick} onItems={p.onItems} patchSlide={p.patchSlide} onEdit={p.onEdit} onTarget={p.onTarget} />
@@ -139,9 +143,9 @@ export function EditorScreen(p: Props) {
         <aside className={`work-panel ${p.panel}`} aria-label={p.panel === 'insert' ? 'Einfügen' : 'Anpassen'}>
           {p.panel === 'insert'
             ? <InsertSearch deck={p.deck} disabled={p.busy} onAdd={add} onAddSlide={(l) => p.addSlide(l)}>
-                <Elements deck={p.deck} disabled={p.busy} onAdd={add} onAddSlide={(l) => p.addSlide(l)} pickImage={p.pickImage} />
+                <Elements deck={p.deck} slideId={slide?.id} disabled={p.busy} onAdd={add} onAddSlide={(l) => p.addSlide(l)} pickImage={p.pickImage} />
               </InsertSearch>
-            : <Inspector deck={p.deck} index={p.index} disabled={p.busy} picked={p.picked} onItems={p.onItems} patchSlide={p.patchSlide} pickImage={p.pickImage} />}
+            : <Inspector deck={p.deck} index={p.index} disabled={p.busy} picked={p.picked} onPick={p.onPick} onItems={p.onItems} patchSlide={p.patchSlide} pickImage={p.pickImage} />}
         </aside>
       )}
     </div>

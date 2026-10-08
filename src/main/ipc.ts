@@ -2,19 +2,23 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, screen, shell } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { PRINT_SIZES, type BrandKit, type Deck, type PrintOptions } from '../shared/deck'
 import { DeckAgent, type AgentEvent, type Engine, type ExportFormat } from './agent'
 import { CLI_NAME, CLIS, CliAgent, findCli, type Cli } from './claude-agent'
 import { AUTO, autoPick, modelOf, routeOf, type ChatModels } from '../shared/models'
 import { setRemoteState, startRemote, stopRemote, type RemoteState } from './remote'
 import { SOURCE_EXT, SOURCE_MAX, sourceText } from './source-text'
-import { assetUrl, buildTools, defaultBrand, localizeDeck, saveBrand, STYLE_FILE } from './tools'
+import { assetUrl, BRAND_FILE, buildTools, defaultBrand, IMAGE_SIZE, IMG_FILE, localizeDeck, makeImage, NO_IMAGE_AI, saveBrand, STYLE_FILE, type Orientation } from './tools'
+import { APP_DIR, checkUpdate, installUpdate } from './update'
 import { imageStatus, loadImageSettings, saveImageSettings } from './image-settings'
-import { createSyncer, localAsset, testSync, type SyncSettings } from './sync'
+import { createSyncer, isFolder, localAsset, testSync, type SyncSettings } from './sync'
+import { checkSyncFolder, findFolder, syncFetchFor } from './sync-folder'
+import { CLOUDS } from '../shared/clouds'
+import { cliLogin, cliLogout, cliStatus, nextcloudLogin, setVibeKey, vibeKey, type LoginCli } from './accounts'
 
 const HOME = join(homedir(), 'Deckwerk')
 
@@ -68,7 +72,8 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     if (!path || dirty || !files.includes(path) || !existsSync(path)) return
     try { deck = readDeck(path); agent?.setDeck(deck); if (!win.isDestroyed()) win.webContents.send('deck:synced', deck) } catch (e) { console.warn('[sync] Deck neu laden:', e) }
   }
-  const syncer = createSyncer(HOME, () => syncCfg, (st) => { if (!win.isDestroyed()) win.webContents.send('sync:status', st) }, syncChanged)
+  const syncFetch = syncFetchFor(HOME) // Ordner-Ziele nie in HOME, auch wenn der Ordner später per Link dorthin zeigt
+  const syncer = createSyncer(HOME, () => syncCfg, (st) => { if (!win.isDestroyed()) win.webContents.send('sync:status', st) }, syncChanged, syncFetch)
   syncer.later(3000)
   // Änderungen anderer Geräte bzw. des MCP-Prozesses: beim Zurückkehren ins Fenster und alle 5 Minuten abholen
   win.on('focus', () => syncer.later(1000))
@@ -233,34 +238,71 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     agent = null // nächster send nutzt den neuen Key
     return r?.ok ? 'geprüft' : 'ungeprüft'
   })
+  ipcMain.handle('key:clear', async () => {
+    await rm(keyFile, { force: true })
+    agent?.abort()
+    agent = null
+  })
   // Hilfe-Links der Einrichtung öffnen im Browser; nur diese Ziele, der Renderer kann keine beliebige Adresse öffnen
-  const HILFE = { 'api-keys': 'https://platform.claude.com/settings/keys', claude: 'https://code.claude.com/docs/en/setup', node: 'https://nodejs.org/' }
+  const HILFE = {
+    'api-keys': 'https://platform.claude.com/settings/keys', claude: 'https://code.claude.com/docs/en/setup', node: 'https://nodejs.org/',
+    mistral: 'https://console.mistral.ai/api-keys', openai: 'https://platform.openai.com/api-keys', unsplash: 'https://unsplash.com/oauth/applications',
+  }
   ipcMain.handle('hilfe:open', (_, id: string) => {
     if (!Object.hasOwn(HILFE, id)) throw new Error(`Unbekannter Link: ${id}`)
     return shell.openExternal(HILFE[id as keyof typeof HILFE])
   })
 
-  // KI-Bilder (Einrichtung → Bilder): Keys bleiben im Main-Prozess, generate_image liest sie beim Aufruf
+  // KI-Bilder (Einstellungen → Bilder): Keys bleiben im Main-Prozess, generate_image liest sie beim Aufruf
   ipcMain.handle('imageSettings:get', () => imageStatus())
   ipcMain.handle('imageSettings:set', (_, patch: unknown) => saveImageSettings(patch))
 
   ipcMain.handle('sync:get', () => syncer.status())
   ipcMain.handle('sync:run', () => syncer.run())
   ipcMain.handle('sync:test', (_, s: SyncSettings) => testSync(s))
-  ipcMain.handle('sync:set', async (_, s: SyncSettings | null) => {
+  const saveSync = async (s: SyncSettings | null) => {
     const sent = () => { if (!win.isDestroyed()) win.webContents.send('sync:status', syncer.status()) } // auch die Wolke in der Kopfleiste
     if (!s) { syncCfg = null; await rm(syncFile, { force: true }); sent(); return syncer.status() }
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Keine sichere Schlüsselablage verfügbar, das Passwort kann nicht gespeichert werden.')
     const url = String(s.url).trim(), user = String(s.user).trim()
     // gespeichertes Passwort nur für denselben Zugang, nie an eine neue Adresse
     const next = { url, user, pass: String(s.pass) || (syncCfg?.url === url && syncCfg.user === user ? syncCfg.pass : '') }
-    if (!next.url || !next.user || !next.pass) throw new Error('Adresse, Nutzername und App-Passwort ausfüllen.')
-    await testSync(next)
+    // Ordner-Zugang (Dropbox & Co.) ohne Nutzer und Passwort; geprüft auch hier, weil sync:set file:-Adressen durchreicht
+    if (isFolder(url)) {
+      let dir: string
+      try { dir = fileURLToPath(url) } catch { throw new Error('Diesen Ordner kann Deckwerk nicht nutzen: Die Adresse ist ungültig.') }
+      await checkSyncFolder(dir, HOME)
+    } else if (!next.url || !next.user || !next.pass) throw new Error('Adresse, Nutzername und App-Passwort ausfüllen.')
+    await testSync(next, syncFetch)
     syncCfg = next
     await mkdir(dirname(syncFile), { recursive: true })
     await writeFile(syncFile, safeStorage.encryptString(JSON.stringify(next)), { mode: 0o600 })
     sent()
     return syncer.run()
+  }
+  ipcMain.handle('sync:set', (_, s: SyncSettings | null) => saveSync(s))
+  // Cloud über den Sync-Ordner einer Desktop-App: Deckwerk spiegelt nach <ordner>/Deckwerk, die App lädt hoch
+  ipcMain.handle('sync:folder', (_, dir: unknown) => {
+    if (typeof dir !== 'string' || !dir.trim() || !isAbsolute(dir)) throw new Error('Diesen Ordner kann Deckwerk nicht nutzen: Bitte einen Ordner auswählen.')
+    return saveSync({ url: pathToFileURL(dir).href, user: '', pass: '' })
+  })
+  ipcMain.handle('cloud:folders', async () => {
+    const found: { id: string; path: string }[] = []
+    for (const c of CLOUDS) for (const f of c.folders ?? []) {
+      const path = await findFolder(f)
+      if (path) { found.push({ id: c.id, path }); break }
+    }
+    return found
+  })
+  ipcMain.handle('cloud:pickFolder', async (_, start?: unknown) => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], defaultPath: typeof start === 'string' && existsSync(start) ? start : undefined })
+    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+  })
+  // nur Links aus CLOUDS und nur https: der Renderer kann keine beliebige Adresse öffnen
+  ipcMain.handle('cloud:help', (_, id: unknown) => {
+    const help = CLOUDS.find((c) => c.id === id)?.help
+    if (!help?.startsWith('https://')) throw new Error('Für diesen Anbieter gibt es keine Hilfeseite.')
+    return shell.openExternal(help)
   })
 
   ipcMain.handle('image:pick', async () => {
@@ -311,6 +353,31 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   })
   ipcMain.handle('brand:get', () => defaultBrand() ?? null)
   ipcMain.handle('brand:set', (_e, b: BrandKit) => saveBrand(b))
+  ipcMain.handle('brand:clear', () => rm(BRAND_FILE, { force: true }))
+  ipcMain.handle('style:get', () => readFile(STYLE_FILE, 'utf8').catch(() => ''))
+  ipcMain.handle('style:set', async (_, text: unknown) => {
+    if (typeof text !== 'string') throw new Error('Ungültiger Hausstil.')
+    if (text.length > 20_000) throw new Error('Der Hausstil ist zu lang (höchstens 20 000 Zeichen).')
+    await mkdir(dirname(STYLE_FILE), { recursive: true })
+    await writeFile(STYLE_FILE, text)
+  })
+  ipcMain.handle('app:info', () => ({
+    version: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node,
+    platform: `${process.platform} ${process.arch}`, home: HOME,
+  }))
+  ipcMain.handle('update:check', () => checkUpdate(app.getVersion()))
+  ipcMain.handle('update:install', async () => {
+    if (!(await checkUpdate(app.getVersion())).canInstall) throw new Error('Diese Installation aktualisiert sich nicht selbst. Im Terminal: deckwerk update')
+    await installUpdate()
+    // das alte Verzeichnis ist ersetzt: neu starten, auch wenn die Fenster noch Dateien daraus halten
+    app.relaunch({ execPath: join(APP_DIR, 'AppRun'), args: process.argv.slice(1) })
+    app.exit(0)
+  })
+  ipcMain.handle('app:openHome', async () => {
+    await mkdir(HOME, { recursive: true })
+    const err = await shell.openPath(HOME)
+    if (err) throw new Error(err)
+  })
   ipcMain.handle('style:open', async () => {
     await mkdir(HOME, { recursive: true })
     if (!existsSync(STYLE_FILE)) await writeFile(STYLE_FILE, '# Hausstil\n\n<!-- Gilt für jedes Deck. Eine Vorliebe pro Zeile; die KI ergänzt hier, wenn du „merk dir …“ sagst. -->\n')
@@ -356,6 +423,29 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     const urls = out.text.match(/asset:\/\/local\S+/g) ?? []
     return { urls, note: urls.length ? undefined : out.text }
   })
+  // Einfügen-Panel (Canva „Magic Media“): dieselbe Bild-KI wie generate_image, Datei landet unter ~/Deckwerk/assets
+  let generating = false
+  ipcMain.handle('image:generate', async (_, prompt: unknown, orientation: unknown) => {
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) throw new Error('Bitte das Bild beschreiben (höchstens 2000 Zeichen).')
+    if (typeof orientation !== 'string' || !Object.hasOwn(IMAGE_SIZE, orientation)) throw new Error(`Unbekanntes Format: ${orientation}`)
+    // eine Erzeugung zur Zeit aus dem Panel: jeder Aufruf kostet beim Anbieter Geld
+    if (generating) throw new Error('Es wird schon ein Bild erzeugt. Bitte kurz warten.')
+    generating = true
+    try {
+      const img = await makeImage(prompt.trim(), orientation as Orientation, assets)
+      if (!img) throw new Error(NO_IMAGE_AI)
+      return assetUrl(img.file)
+    } finally { generating = false }
+  })
+  // „Deine Bilder“ (Canva „Uploads“): die neuesten Bilder unter ~/Deckwerk/assets, auch aus Unterordnern wie import-*
+  ipcMain.handle('assets:list', async () => {
+    const files = (await readdir(assets, { recursive: true }).catch(() => [] as string[])).filter((f) => IMG_FILE.test(f))
+    const found = await Promise.all(files.map(async (f) => {
+      const st = await stat(join(assets, f)).catch(() => null)
+      return st?.isFile() ? [{ url: assetUrl(join(assets, f)), name: basename(f), mtime: st.mtimeMs }] : []
+    }))
+    return found.flat().sort((a, b) => b.mtime - a.mtime).slice(0, 60)
+  })
 
   // Kopie als eigenes Deck unter ~/Deckwerk/<titel>/deck.json speichern (Formate: Quadrat, Story …); das offene Deck bleibt
   // Vorlagen-Galerie (Canva „Vorlagen“): kuratierte Decks aus examples/, Bildpfade aufgelöst; geöffnet wird immer eine Kopie
@@ -368,6 +458,31 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     const file = join(freeDir(copy.title), 'deck.json')
     await writeFile(file, JSON.stringify(copy, null, 2))
     return file
+  })
+  // Versionsverlauf: die Stände aus snapshot() des offenen Decks, neueste zuerst; wiederhergestellt wird über deck:openPath (restore())
+  const versionsDir = () => (path ? join(dirname(path), 'versions') : null)
+  ipcMain.handle('versions:list', async () => {
+    const dir = versionsDir()
+    if (!dir) return []
+    const names = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'))
+    const found = await Promise.all(names.map(async (name) => {
+      const file = join(dir, name)
+      try {
+        const d = readDeck(file)
+        // Dateiname aus snapshot(): Ortszeit „2026-10-07T14-03-05“; fremde Namen → mtime
+        const m = name.match(/^(\d{4})-(\d\d)-(\d\d)T(\d\d)-(\d\d)-(\d\d)/)
+        const at = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : (await stat(file)).mtimeMs
+        return { file, at, slides: d.slides.length, title: d.title }
+      } catch { return null }
+    }))
+    return found.filter((x) => x !== null).sort((a, b) => b.at - a.at)
+  })
+  // Vertrauensgrenze: der Pfad kommt aus dem Renderer und muss genau im versions-Ordner des offenen Decks liegen
+  ipcMain.handle('versions:read', async (_, f: string) => {
+    const dir = versionsDir()
+    const real = dir && typeof f === 'string' ? await realpath(f).catch(() => null) : null
+    if (!dir || !real || !real.endsWith('.json') || dirname(real) !== (await realpath(dir).catch(() => null))) throw new Error('Diese Version gehört nicht zum offenen Deck.')
+    return readDeck(real, dirname(dirname(real))) // Bildpfade relativ zum Deck-Ordner wie nach dem Wiederherstellen
   })
 
   // Referentenansicht auf zwei Bildschirmen: Publikum im Vollbild auf dem anderen Display (index.html#audience),
@@ -442,13 +557,65 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     if (!CLIS.includes(cli as Cli)) throw new Error(`Unbekanntes Werkzeug: ${String(cli)}`)
     return cli as Cli
   }
-  // Angemeldet? Nur Codex sagt das schnell (`codex login status`, Exit-Code); bei den anderen null = unbekannt
-  const loggedIn = (cli: Cli): Promise<boolean | null> => cli !== 'codex' || !clis.codex ? Promise.resolve(null)
-    : new Promise((ok) => execFile(clis.codex!, ['login', 'status'], { timeout: 10_000 }, (e) => ok(!e)))
+  // Angemeldet? Claude Code und Codex fragen; Vibe: Mistral-Key gefunden, sonst unbekannt (er kann im Schlüsselbund liegen)
+  const loggedIn = async (cli: Cli): Promise<{ login: boolean | null; who?: string }> =>
+    cli === 'vibe' ? { login: vibeKey() || null } : clis[cli] ? cliStatus(clis[cli]!, cli) : { login: null }
   ipcMain.handle('setup:status', async () => (detect(), {
     key: hasApiKey(),
-    clis: await Promise.all(CLIS.map(async (c) => ({ id: c, name: CLI_NAME[c], found: !!clis[c], mcp: registered(c) && skillOk(c), login: await loggedIn(c) }))),
+    clis: await Promise.all(CLIS.map(async (c) => ({ id: c, name: CLI_NAME[c], found: !!clis[c], mcp: registered(c) && skillOk(c), ...await loggedIn(c) }))),
   }))
+
+  // Konten (Einstellungen): eine Anmeldung zur Zeit, CLI oder Nextcloud; eine neue bricht die laufende ab.
+  // url: Anmeldeseite zum erneuten Öffnen, code: reicht einen Code aus dem Browser an das CLI
+  type Login = { ctrl: AbortController; url: string; code?: (c: string) => void }
+  let login: Login | null = null
+  const runLogin = async <T>(fn: (l: Login) => Promise<T>): Promise<T> => {
+    login?.ctrl.abort()
+    const l: Login = { ctrl: new AbortController(), url: '' }
+    login = l
+    try { return await fn(l) } finally { if (login === l) login = null }
+  }
+  const loginUrl = (l: Login, url: string, code: boolean) => { l.url = url; if (!win.isDestroyed()) win.webContents.send('account:url', { url, code }) }
+  win.on('closed', () => login?.ctrl.abort()) // sonst hielte Codex seinen Port 1455 nach dem Beenden belegt
+  const loginCli = (c: unknown): { cli: LoginCli; bin: string } => {
+    const cli = cliArg(c)
+    if (cli === 'vibe') throw new Error('Vibe hat keine Anmeldung, nur einen Mistral-Schlüssel.')
+    detect()
+    const bin = clis[cli]
+    if (!bin) throw new Error(`${CLI_NAME[cli]} ist nicht installiert.`)
+    return { cli, bin }
+  }
+  ipcMain.handle('account:login', (_, c: unknown) => {
+    const { cli, bin } = loginCli(c)
+    return runLogin(async (l) => {
+      const r = cliLogin(bin, cli, (e) => loginUrl(l, e.url, e.code), l.ctrl.signal)
+      l.code = r.code
+      await r.done
+    })
+  })
+  ipcMain.handle('account:code', (_, c: unknown) => {
+    if (typeof c !== 'string' || !c.trim() || c.length > 2000) throw new Error('Den Code aus dem Browser vollständig einfügen.')
+    if (!login?.code) throw new Error('Gerade läuft keine Anmeldung, die einen Code erwartet.')
+    login.code(c)
+  })
+  ipcMain.handle('account:cancel', () => { login?.ctrl.abort(); login = null })
+  ipcMain.handle('account:open', () => {
+    if (!login?.url || !/^https?:\/\//i.test(login.url)) throw new Error('Gerade läuft keine Anmeldung.')
+    return shell.openExternal(login.url)
+  })
+  ipcMain.handle('account:logout', (_, c: unknown) => {
+    const { cli, bin } = loginCli(c)
+    return cliLogout(bin, cli)
+  })
+  ipcMain.handle('account:vibeKey', (_, k: unknown) => setVibeKey(k as string | null)) // prüft Typ und Länge selbst
+  ipcMain.handle('sync:nextcloud', async (_, server: unknown) => {
+    if (typeof server !== 'string' || !server.trim() || server.length > 500) throw new Error('Die Adresse deiner Nextcloud eingeben, z. B. cloud.example.de.')
+    const s = await runLogin((l) => nextcloudLogin(server, {
+      signal: l.ctrl.signal,
+      open: (url) => { loginUrl(l, url, false); shell.openExternal(url).catch(() => {}) }, // klappt das nicht: Seite über account:url bzw. account:open
+    }))
+    return saveSync(s)
+  })
   // Modell-Dropdown: Claude (Key oder Claude Code), Vibe mit den Modellen aus seiner config.toml (die aktive zuerst),
   // Codex mit den sichtbaren Modellen seines Katalogs. Ohne Liste bleibt die Voreinstellung des CLI („vibe:“, „codex:“).
   const vibeModels = (): ChatModels['vibe'] => {
@@ -458,7 +625,8 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
     const list = text.split(/^\[\[models\]\]\s*$/m).slice(1).map((b) => b.split(/^\[/m)[0]).flatMap((b) => {
       const alias = /^alias\s*=\s*"([^"]+)"/m.exec(b)?.[1] ?? /^name\s*=\s*"([^"]+)"/m.exec(b)?.[1]
       const provider = /^provider\s*=\s*"([^"]+)"/m.exec(b)?.[1]
-      return alias ? [{ id: `vibe:${alias}`, name: `Vibe · ${alias}`, hint: [provider, alias === active && 'Voreinstellung in Vibe'].filter(Boolean).join(', ') }] : []
+      const hint = [provider === 'llamacpp' && 'läuft lokal auf diesem Rechner', alias === active && 'Voreinstellung in Vibe'].filter(Boolean).join(', ')
+      return alias ? [{ id: `vibe:${alias}`, name: `Vibe · ${alias}`, hint: hint || undefined }] : []
     }).sort((a, b) => Number(b.id === `vibe:${active}`) - Number(a.id === `vibe:${active}`))
     return list.length ? list : [{ id: 'vibe:', name: 'Vibe', hint: 'Modell aus der Vibe-Einstellung' }]
   }
@@ -468,7 +636,7 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
       if (e) throw e
       const all = (JSON.parse(out).models as { slug: string; display_name?: string; description?: string; visibility?: string; priority?: number }[])
       const list = all.filter((m) => m.visibility === 'list').sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-      ok(list.map((m) => ({ id: `codex:${m.slug}`, name: `Codex · ${m.display_name ?? m.slug}`, hint: m.description })))
+      ok(list.map((m) => ({ id: `codex:${m.slug}`, name: `Codex · ${m.display_name ?? m.slug}` }))) // ohne die englische Katalogbeschreibung
     } catch { ok([{ id: 'codex:', name: 'Codex', hint: 'Modell aus der Codex-Einstellung' }]) }
   }))
   ipcMain.handle('chat:models', async (): Promise<ChatModels> => (detect(), {
@@ -525,10 +693,10 @@ export function registerIpc(win: BrowserWindow, engine: Engine): void {
   }))
 }
 
-function readDeck(file: string): Deck {
+function readDeck(file: string, dir = dirname(file)): Deck {
   const d = JSON.parse(readFileSync(file, 'utf8'))
   if (!Array.isArray(d?.slides) || !d.theme) throw new Error('Das ist keine gültige deck.json.')
-  return localizeDeck(d, dirname(file)) // relative Bildpfade (Deck-Ordner mit assets/ weitergegeben) auflösen
+  return localizeDeck(d, dir) // relative Bildpfade (Deck-Ordner mit assets/ weitergegeben) auflösen
 }
 
 // ~/Deckwerk/<titel-slug>, bei Kollision mit -2, -3 …

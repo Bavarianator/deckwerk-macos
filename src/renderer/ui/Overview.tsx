@@ -1,7 +1,7 @@
-// Übersicht: alle Folien als Lichttisch, nach Kapiteln. Klick wählt (Umschalt/Strg: mehrere), Doppelklick öffnet,
-// Ziehen sortiert um. Für die Auswahl: Duplizieren, Löschen, mit Deckwerk überarbeiten.
-import { useState } from 'react'
-import { Check, Sparkles } from 'lucide-react'
+// Übersicht: alle Folien als Lichttisch, nach Kapiteln. Klick wählt (⇧: Bereich, Strg: einzeln dazu), Doppelklick öffnet,
+// Ziehen sortiert um. Für die Auswahl: Kopieren/Einfügen (⌘C/V), Duplizieren, Ausblenden, Löschen, mit Deckwerk überarbeiten.
+import { useRef, useState } from 'react'
+import { Check, EyeOff, Sparkles } from 'lucide-react'
 import type { Deck, Measured } from '../../shared/deck'
 import { SlideView } from '../slide'
 import { chaptersOf, titleOf } from './story'
@@ -9,25 +9,37 @@ import { confirmDialog } from './kit'
 
 interface Props {
   deck: Deck
+  index: number
   busy: boolean
   onOpen: (i: number) => void
   onMove: (from: number, to: number) => void
   onDup: (i: number) => void
   onDel: (i: number) => void
+  onHide: (idx: number[], on: boolean) => void
+  onCopy: (idx: number[]) => void
+  onPaste: (at: number) => number
   onAsk: (text: string, context: string) => boolean
 }
 
 const W = 212
 
-export function Overview({ deck, busy, onOpen, onMove, onDup, onDel, onAsk }: Props) {
-  const [sel, setSel] = useState<number[]>([])
+export function Overview({ deck, index, busy, onOpen, onMove, onDup, onDel, onHide, onCopy, onPaste, onAsk }: Props) {
+  const [picked, setSel] = useState<number[]>([])
+  const sel = picked.filter((i) => i < deck.slides.length) // Deck kann schrumpfen (Rückgängig, KI): alte Indizes fallen weg
   const [fit, setFit] = useState<Record<string, Measured['fit']>>({})
   const [from, setFrom] = useState<number | null>(null)
   const [over, setOver] = useState<number | null>(null)
-  const pick = (i: number, add: boolean) => setSel((s) => (add ? (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]) : [i]))
+  const anchor = useRef<number | null>(null) // zuletzt geklickte Folie, Start der Umschalt-Auswahl
+  const range = (a: number, b: number) => Array.from({ length: Math.abs(b - a) + 1 }, (_, k) => Math.min(a, b) + k)
+  const pick = (i: number, e: React.MouseEvent) => {
+    if (e.shiftKey && anchor.current !== null) return setSel(range(Math.min(anchor.current, deck.slides.length - 1), i))
+    anchor.current = i
+    setSel((s) => (e.ctrlKey || e.metaKey ? (s.includes(i) ? s.filter((x) => x !== i) : [...s, i]) : [i]))
+  }
   const desc = [...sel].sort((a, b) => b - a) // von hinten, damit die Indizes stimmen
   // Faustregel: gut eine Minute pro Inhaltsfolie, Kapiteltrenner und Titel zählen kaum
   const minutes = Math.max(1, Math.round(deck.slides.reduce((m, s) => m + (s.layout === 'section' || s.layout === 'cover' ? 0.25 : 1.1), 0)))
+  const shown = sel.some((i) => !deck.slides[i].hidden) // Auswahl enthält sichtbare Folien: Knopf blendet aus, sonst ein
   const ids = sel.map((i) => `„${deck.slides[i].id}“ (Folie ${i + 1})`).join(', ')
 
   return (
@@ -37,6 +49,11 @@ export function Overview({ deck, busy, onOpen, onMove, onDup, onDel, onAsk }: Pr
         const mod = e.ctrlKey || e.metaKey
         if (mod && e.key.toLowerCase() === 'a') setSel(deck.slides.map((_, i) => i))
         else if (e.key === 'Escape') setSel([])
+        else if (mod && e.key.toLowerCase() === 'c' && sel.length) onCopy(sel)
+        else if (mod && e.key.toLowerCase() === 'v' && !busy) {
+          const at = (sel.length ? Math.max(...sel) : index) + 1, n = onPaste(at)
+          if (n) { setSel(range(at, at + n - 1)); anchor.current = at }
+        }
         else if ((e.key === 'Delete' || e.key === 'Backspace') && sel.length && sel.length < deck.slides.length && !busy) void confirmDialog({ title: `${sel.length === 1 ? 'Folie' : `${sel.length} Folien`} löschen?`, text: 'Mit ⌘Z holst du sie zurück.', ok: 'Löschen', danger: true }).then((ok) => { if (ok) { desc.forEach(onDel); setSel([]) } })
         else return
         e.preventDefault()
@@ -55,11 +72,11 @@ export function Overview({ deck, busy, onOpen, onMove, onDup, onDel, onAsk }: Pr
                 <button
                   key={s.id}
                   type="button"
-                  className={`grid-slide ${sel.includes(i) ? 'on' : ''} ${over === i && from !== i ? 'over' : ''}`}
+                  className={`grid-slide ${sel.includes(i) ? 'on' : ''} ${over === i && from !== i ? 'over' : ''} ${s.hidden ? 'dw-hidden' : ''}`}
                   aria-pressed={sel.includes(i)}
-                  aria-label={`Folie ${i + 1}${bad ? ', Text passt nicht' : ''}`}
+                  aria-label={`Folie ${i + 1}${s.hidden ? ', ausgeblendet' : ''}${bad ? ', Text passt nicht' : ''}`}
                   draggable={!busy}
-                  onClick={(e) => pick(i, e.shiftKey || e.ctrlKey || e.metaKey)}
+                  onClick={(e) => pick(i, e)}
                   onDoubleClick={() => onOpen(i)}
                   onDragStart={(e) => { setFrom(i); e.dataTransfer.effectAllowed = 'move' }}
                   onDragOver={(e) => { e.preventDefault(); setOver(i) }}
@@ -71,7 +88,7 @@ export function Overview({ deck, busy, onOpen, onMove, onDup, onDel, onAsk }: Pr
                     {bad && <span className="grid-warn" />}
                     {sel.includes(i) && <span className="grid-check"><Check size={11} strokeWidth={3.2} /></span>}
                   </span>
-                  <span className="grid-cap"><b>{i + 1}</b><span>{titleOf(deck, i)}</span></span>
+                  <span className="grid-cap"><b>{i + 1}</b>{s.hidden && <EyeOff size={13} className="grid-off" aria-hidden />}<span>{titleOf(deck, i)}</span></span>
                   {bad && <span className="grid-bad">Text passt nicht</span>}
                 </button>
               )
@@ -84,6 +101,7 @@ export function Overview({ deck, busy, onOpen, onMove, onDup, onDel, onAsk }: Pr
         <div className="grid-bar material" role="toolbar" aria-label={`${sel.length} Folien ausgewählt`}>
           <b>{sel.length === 1 ? '1 Folie' : `${sel.length} Folien`} ausgewählt</b>
           <button className="plain" disabled={busy} onClick={() => { desc.forEach(onDup); setSel([]) }}>Duplizieren</button>
+          <button className="plain" disabled={busy} onClick={() => onHide(sel, shown)}>{shown ? 'Ausblenden' : 'Einblenden'}</button>
           <button className="plain danger" disabled={busy || sel.length >= deck.slides.length}
             onClick={() => void confirmDialog({ title: `${sel.length === 1 ? 'Folie' : `${sel.length} Folien`} löschen?`, text: 'Mit ⌘Z holst du sie zurück.', ok: 'Löschen', danger: true }).then((ok) => { if (ok) { desc.forEach(onDel); setSel([]) } })}>Löschen</button>
           <i aria-hidden="true" />

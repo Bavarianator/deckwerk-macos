@@ -238,6 +238,9 @@ function strayKeys(s: JsonSchema, v: unknown, path: string): string[] {
   return []
 }
 
+// Markiert ausgeblendete Folien in jeder Auflistung für die KI
+const hid = (s: Slide | undefined) => (s?.hidden ? ' (ausgeblendet)' : '')
+
 function fmtIssues(issues: Issue[]): string {
   return issues.map((i) => `  - [${i.severity}] ${i.rule}${i.slot ? ` @${i.slot}` : ''}: ${i.message}`).join('\n')
 }
@@ -258,7 +261,7 @@ async function report(ctx: ToolContext, deck: Deck, indices: number[]): Promise<
       const own = issues.filter((x) => x.slide === i)
       const errors = own.filter((x) => x.severity === 'error').length
       const fit = m ? `Autofit head ${m.fit.head}/body ${m.fit.body}${m.fit.ok ? '' : ', Überlauf: ' + m.fit.overflow.map((o) => `${o.slot} +${Math.round(o.overPx)}px (${o.kind})`).join(', ')}` : 'nicht gemessen'
-      const head = `Folie ${i + 1} (${s.id}, ${s.layout}): ${errors ? `${errors} FEHLER` : 'OK'} · ${fit}${m ? ` · ${motionOf(deck, i, m)}` : ''}`
+      const head = `Folie ${i + 1} (${s.id}, ${s.layout})${hid(s)}: ${errors ? `${errors} FEHLER` : 'OK'} · ${fit}${m ? ` · ${motionOf(deck, i, m)}` : ''}`
       return own.length ? `${head}\n${fmtIssues(own)}` : head
     })
     .join('\n')
@@ -395,7 +398,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
     }),
     tool({
       name: 'update_slide',
-      description: 'Eine Folie ändern: Inhalt (Patch, wird mit dem Bestand gemischt), Layout, Variante, Build, Notes. Gibt Autofit und Lint zurück.',
+      description: 'Eine Folie ändern: Inhalt (Patch, wird mit dem Bestand gemischt), Layout, Variante, Build, Notes, Ausblenden. Gibt Autofit und Lint zurück.',
       inputSchema: z.object({
         id: z.string(),
         layout: layoutId.optional().describe('Layout wechseln; dann content vollständig mitgeben'),
@@ -409,6 +412,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
         notes: z.string().max(1500).nullable().optional(),
         items: z.array(itemSchema).max(60).nullable().optional().describe('Ersetzt alle freien Elemente der Folie (vorhandene IDs mitgeben, um sie zu behalten); null = alle entfernen'),
         bg: slideBg.nullable().optional(),
+        hidden: z.boolean().optional().describe('true = Folie ausblenden (fehlt beim Präsentieren und in PDF, PNG, Word, Handout; in PowerPoint versteckt), false = wieder einblenden'),
       }),
       async run(i) {
         const deck = needDeck(ctx)
@@ -428,6 +432,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
         if (i.notes !== undefined) s.notes = i.notes ? typeset(i.notes) : undefined
         if (i.items !== undefined) s.items = withIds((i.items ?? undefined) as Item[] | undefined)
         if (i.bg !== undefined) s.bg = i.bg ?? undefined
+        if (i.hidden !== undefined) s.hidden = i.hidden || undefined
         ctx.setDeck(deck)
         return { text: await report(ctx, deck, [idx]) }
       },
@@ -442,7 +447,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
         if ([...i.order].sort().join() !== have) throw new Error(`order muss genau alle IDs enthalten: ${deck.slides.map((s) => s.id).join(', ')}`)
         deck.slides = i.order.map((id) => deck.slides[indexOf(deck, id)])
         ctx.setDeck(deck)
-        return { text: `Neue Reihenfolge: ${deck.slides.map((s, k) => `${k + 1}:${s.layout}`).join(' ')}` }
+        return { text: `Neue Reihenfolge: ${deck.slides.map((s, k) => `${k + 1}:${s.layout}${hid(s)}`).join(' ')}` }
       },
     }),
     tool({
@@ -514,7 +519,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
         const deck = needDeck(ctx)
         const idx = i.ids.map((id) => indexOf(deck, id))
         const bufs = await ctx.engine.renderPng(deck, idx, i.width)
-        return { text: idx.map((k) => `Folie ${k + 1} (${deck.slides[k].id}, ${deck.slides[k].layout})`).join('\n'), images: bufs }
+        return { text: idx.map((k) => `Folie ${k + 1} (${deck.slides[k].id}, ${deck.slides[k].layout})${hid(deck.slides[k])}`).join('\n'), images: bufs }
       },
     }),
     tool({
@@ -554,7 +559,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
       async run() {
         const deck = needDeck(ctx)
         if (!deck.slides.length) throw new Error('Das Deck hat noch keine Folien.')
-        return { text: `Kontaktbogen: ${deck.slides.length} Folien, Reihenfolge ${deck.slides.map((s) => s.layout).join(' → ')}\n${ART_DIRECTOR}`, images: [await ctx.engine.renderOverview(deck)] }
+        return { text: `Kontaktbogen: ${deck.slides.length} Folien, Reihenfolge ${deck.slides.map((s) => s.layout + hid(s)).join(' → ')}\n${ART_DIRECTOR}`, images: [await ctx.engine.renderOverview(deck)] }
       },
     }),
     tool({
@@ -566,7 +571,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
         const issues = await ctx.engine.lint(deck)
         const e = issues.filter((x) => x.severity === 'error').length
         if (!issues.length) return { text: 'Keine Probleme. Das Deck ist sauber.' }
-        return { text: `${e} Fehler, ${issues.length - e} Warnungen:\n` + issues.map((x) => `  - Folie ${x.slide + 1} (${x.slideId}) [${x.severity}] ${x.rule}${x.slot ? ` @${x.slot}` : ''}: ${x.message}`).join('\n') }
+        return { text: `${e} Fehler, ${issues.length - e} Warnungen:\n` + issues.map((x) => `  - Folie ${x.slide + 1} (${x.slideId})${hid(deck.slides[x.slide])} [${x.severity}] ${x.rule}${x.slot ? ` @${x.slot}` : ''}: ${x.message}`).join('\n') }
       },
     }),
     tool({
@@ -601,8 +606,9 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
         } catch {}
         if (i.source === 'local' || (i.source === 'auto' && local.length)) return localImages(ctx, local.map((h) => h.file), i.limit)
         if (!i.query) return { text: `${local.length ? '' : 'Keine lokalen Bilder. '}Für Fotos aus dem Netz eine englische query angeben.` }
-        if (i.source === 'unsplash' && !ctx.unsplashKey) throw new Error('Unsplash ist nicht konfiguriert (UNSPLASH_ACCESS_KEY fehlt). source "web" sucht ohne Key.')
-        return i.source !== 'web' && ctx.unsplashKey ? unsplash(ctx, i.query, i.limit, i.orientation) : openverse(ctx, i.query, i.limit, i.orientation)
+        const unsplashKey = imageSettings.unsplash || ctx.unsplashKey // Key aus der App hat Vorrang wie bei den Bild-Keys
+        if (i.source === 'unsplash' && !unsplashKey) throw new Error('Unsplash ist nicht eingerichtet (Einstellungen → Bilder oder UNSPLASH_ACCESS_KEY). source "web" sucht ohne Key.')
+        return i.source !== 'web' && unsplashKey ? unsplash(ctx, i.query, i.limit, i.orientation) : openverse(ctx, i.query, i.limit, i.orientation)
       },
     }),
     tool({
@@ -670,7 +676,7 @@ export function buildTools(ctx: ToolContext): ToolDef[] {
 
 // Unsplash: suchen, die besten `limit` Fotos (1080 px) nach assetDir laden, Download melden (API-Bedingung), Thumbs zurückgeben.
 async function unsplash(ctx: ToolContext, query: string, limit: number, orientation = 'landscape'): Promise<ToolOutput> {
-  const headers = { Authorization: `Client-ID ${ctx.unsplashKey}`, 'Accept-Version': 'v1' }
+  const headers = { Authorization: `Client-ID ${imageSettings.unsplash || ctx.unsplashKey}`, 'Accept-Version': 'v1' }
   const get = (url: string) => fetch(url, { headers, signal: AbortSignal.timeout(20_000) })
   const res = await get(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${limit}&orientation=${orientation}&content_filter=high`)
   if (!res.ok) throw new Error(`Unsplash antwortet ${res.status}: ${(await res.text()).slice(0, 200)}`)
@@ -755,7 +761,7 @@ async function preview(ctx: ToolContext, img: Buffer, src: string, w0: number, h
 }
 
 // Eigene Bilder (auch Unterordner wie import-*/ aus dem Quellmaterial): Maße für die Trefferzeile, SVG/AVIF ohne lesbare Pixelmaße
-const IMG_FILE = /\.(png|jpe?g|gif|webp|svg|avif)$/i
+export const IMG_FILE = /\.(png|jpe?g|gif|webp|svg|avif)$/i
 function dims(buf: Buffer, file: string): { label: string; w: number; h: number } {
   const s = imageSize(buf)
   if (!s) return { label: extname(file).slice(1).toUpperCase(), w: 1600, h: 1000 }
@@ -830,38 +836,47 @@ async function openverse(ctx: ToolContext, query: string, limit: number, orienta
 }
 
 // KI-Bilder: Mammouth (LiteLLM-Proxy) und OpenAI sprechen dieselbe Images-API; Codex erzeugt sie mit dem ChatGPT-Login über sein
-// eingebautes image_gen. Einstellungen aus der App (Einrichtung → Bilder, image-settings.ts) haben Vorrang, sonst gilt die Umgebung;
+// eingebautes image_gen. Einstellungen aus der App (Einstellungen → Bilder, image-settings.ts) haben Vorrang, sonst gilt die Umgebung;
 // beides wird erst beim Aufruf gelesen.
 export const IMAGE_PROVIDERS = ['mammouth', 'openai', 'codex'] as const
 export type ImageProvider = (typeof IMAGE_PROVIDERS)[number]
-export const imageSettings: { mammouth?: string; openai?: string; provider?: ImageProvider; model?: string } = {}
+export const imageSettings: { mammouth?: string; openai?: string; unsplash?: string; provider?: ImageProvider; model?: string } = {}
 const IMAGE_API = {
   mammouth: { url: 'https://api.mammouth.ai/v1', env: 'MAMMOUTH_API_KEY' },
   openai: { url: 'https://api.openai.com/v1', env: 'OPENAI_API_KEY' },
 }
-const IMAGE_SIZE = { landscape: { w: 1536, h: 1024 }, portrait: { w: 1024, h: 1536 }, square: { w: 1024, h: 1024 } }
-type Orientation = keyof typeof IMAGE_SIZE
+export const IMAGE_SIZE = { landscape: { w: 1536, h: 1024 }, portrait: { w: 1024, h: 1536 }, square: { w: 1024, h: 1024 } }
+export type Orientation = keyof typeof IMAGE_SIZE
 const IMAGE_CHECK = 'Vorschau prüfen: Passt das Motiv zur Aussage der Folie? Sind Hände, Gesichter und Perspektive fehlerfrei, ist die Fläche für den Titel ruhig, passt der Stil zu den anderen Bildern? Wenn nicht, den Prompt gezielt ändern; nach zwei Fehlversuchen die Folie ohne Bild bauen. Sonst image.src setzen, focus nach der Vorschau wählen, die Folie mit render_slides ansehen und in die Notes „Bild: KI-generiert. Stil: <Stilsatz>“ schreiben (beim ersten KI-Bild des Decks, damit spätere Bilder dazu passen).'
 
 // Codex nacheinander: codexImage nimmt das neueste Bild im gemeinsamen Ordner, parallel wäre es das falsche
 let codexQueue: Promise<Buffer> = Promise.resolve(Buffer.alloc(0))
 
-async function generateImage(ctx: ToolContext, prompt: string, orientation: Orientation, provider?: ImageProvider): Promise<ToolOutput> {
+export const NO_IMAGE_AI = 'Keine Bild-KI eingerichtet (Einstellungen → Bilder: Mammouth- oder OpenAI-Key, oder Codex installieren).'
+
+// Bild erzeugen und unter assetDir ablegen, ohne Tool-Kontext (auch für die UI, image:generate). null = kein Anbieter eingerichtet
+export async function makeImage(prompt: string, orientation: Orientation, assetDir: string, provider?: ImageProvider): Promise<{ file: string; buf: Buffer; via: string } | null> {
   const keyOf = (p: keyof typeof IMAGE_API) => imageSettings[p] || process.env[IMAGE_API[p].env]
   const ready = (p: ImageProvider) => (p === 'codex' ? !!findCli('codex') : !!keyOf(p))
   const p = provider ?? imageSettings.provider ?? IMAGE_PROVIDERS.find(ready)
-  if (!p) return { text: 'Keine Bild-KI eingerichtet (Einrichtung → Bilder: Mammouth- oder OpenAI-Key, oder Codex installieren). Stattdessen find_images nutzen oder den Nutzer um ein Bild bitten.' }
+  if (!p) return null
   if (!ready(p)) throw new Error(`${p} ist nicht eingerichtet. Verfügbar: ${IMAGE_PROVIDERS.filter(ready).join(', ') || 'keiner'}`)
   const model = imageSettings.model || process.env.IMAGE_MODEL || 'gpt-image-2'
   const buf = p === 'codex' ? await (codexQueue = codexQueue.catch(() => {}).then(() => codexImage(prompt, orientation))) : await apiImage(p, keyOf(p)!, model, prompt, orientation)
-  mkdirSync(ctx.assetDir, { recursive: true })
+  mkdirSync(assetDir, { recursive: true })
   const ext = buf[0] === 0xff && buf[1] === 0xd8 ? 'jpg' : buf.subarray(8, 12).toString() === 'WEBP' ? 'webp' : 'png'
-  const file = join(ctx.assetDir, `ki-${Date.now().toString(36)}${randomBytes(2).toString('hex')}.${ext}`)
+  const file = join(assetDir, `ki-${Date.now().toString(36)}${randomBytes(2).toString('hex')}.${ext}`)
   writeFileSync(file, buf)
-  const src = assetUrl(file)
+  return { file, buf, via: p === 'codex' ? 'Codex' : `${p} · ${model}` }
+}
+
+async function generateImage(ctx: ToolContext, prompt: string, orientation: Orientation, provider?: ImageProvider): Promise<ToolOutput> {
+  const img = await makeImage(prompt, orientation, ctx.assetDir, provider)
+  if (!img) return { text: `${NO_IMAGE_AI} Stattdessen find_images nutzen oder den Nutzer um ein Bild bitten.` }
+  const src = assetUrl(img.file)
   const { w, h } = IMAGE_SIZE[orientation]
-  const images = await preview(ctx, buf, src, w, h) // Codex liefert PNGs mit mehreren MB
-  return { text: `Bild erzeugt (${p === 'codex' ? 'Codex' : `${p} · ${model}`}): ${src}\n${IMAGE_CHECK}`, images }
+  const images = await preview(ctx, img.buf, src, w, h) // Codex liefert PNGs mit mehreren MB
+  return { text: `Bild erzeugt (${img.via}): ${src}\n${IMAGE_CHECK}`, images }
 }
 
 async function apiImage(p: keyof typeof IMAGE_API, key: string, model: string, prompt: string, orientation: Orientation): Promise<Buffer> {

@@ -49,13 +49,22 @@ export function reorder(items: Item[], ids: string[], how: Order): Item[] {
   const rest = items.filter((it) => !ids.includes(it.id))
   if (how === 'front') return [...rest, ...sel]
   if (how === 'back') return [...sel, ...rest]
-  // eine Ebene: Auswahl hinter das nächste (bzw. vor das vorige) nicht gewählte Element schieben
+  // eine Ebene: Auswahl hinter das nächste (bzw. vor das vorige) nicht gewählte Element schieben, fremde Gruppen als Ganzes
   const idx = items.findIndex((it) => ids.includes(it.id))
   const last = items.findLastIndex((it) => ids.includes(it.id))
   const anchor = how === 'forward' ? items.slice(last + 1).find((it) => !ids.includes(it.id)) : items.slice(0, idx).findLast((it) => !ids.includes(it.id))
-  if (!anchor) return items
-  const at = rest.indexOf(anchor) + (how === 'forward' ? 1 : 0)
-  return [...rest.slice(0, at), ...sel, ...rest.slice(at)]
+  return anchor ? moveNextTo(items, ids, anchor.id, how === 'forward') : items
+}
+// Auswahl direkt vor (above) bzw. hinter das Element anchor legen (Ebenen-Panel, reorder). Liegt anchor in einer Gruppe,
+// zu der die Auswahl nicht gehört, zählt deren Rand: fremde Elemente landen nie zwischen Gruppenmitgliedern
+export function moveNextTo(items: Item[], ids: string[], anchor: string, above: boolean): Item[] {
+  const rest = items.filter((it) => !ids.includes(it.id))
+  const g = rest.find((it) => it.id === anchor)?.group
+  const edge = g && !items.some((it) => ids.includes(it.id) && it.group === g)
+  const i = edge ? (above ? rest.findLastIndex((it) => it.group === g) : rest.findIndex((it) => it.group === g)) : rest.findIndex((it) => it.id === anchor)
+  if (i < 0) return items
+  const at = i + (above ? 1 : 0)
+  return [...rest.slice(0, at), ...items.filter((it) => ids.includes(it.id)), ...rest.slice(at)]
 }
 
 export type Align = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom'
@@ -100,8 +109,17 @@ export function distribute(items: Item[], ids: string[], axis: 'x' | 'y'): Item[
   return items.map((it) => (pos.has(it.id) ? { ...it, [axis]: pos.get(it.id) } : it))
 }
 
-// Zwischenablage für Elemente, auch über Folien hinweg
-export const clip: { items: Item[] } = { items: [] }
+// Zwischenablage für Elemente und kopierten Stil, auch über Folien hinweg (Kontextmenü, Inspector und Kürzel teilen sie)
+export const clip: { items: Item[]; style: Partial<Item> | null } = { items: [], style: null }
+
+// „Stil übertragen“: Aussehen ohne Inhalt und Position
+const STYLE_KEYS = ['font', 'size', 'color', 'bold', 'italic', 'underline', 'upper', 'align', 'lineHeight', 'spacing', 'effect', 'effectColor',
+  'fill', 'fill2', 'stroke', 'strokeW', 'dash', 'radius', 'shadow', 'opacity', 'look', 'mask', 'adjust'] as const satisfies readonly (keyof Item)[]
+export const copyStyle = (it: Item) => { clip.style = Object.fromEntries(STYLE_KEYS.filter((k) => it[k] !== undefined).map((k) => [k, it[k]])) }
+export const pasteStyle = (items: Item[], ids: string[]): Item[] => {
+  const s = clip.style
+  return s ? items.map((it) => (ids.includes(it.id) ? { ...it, ...Object.fromEntries(STYLE_KEYS.map((k) => [k, s[k]])) } : it)) : items
+}
 
 // asset://-URL wie ipc.ts (pathToFileURL-Kodierung pro Pfadsegment)
 export const assetOf = (path: string) => `asset://local${path.split('/').map(encodeURIComponent).join('/')}`
