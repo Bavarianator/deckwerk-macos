@@ -21,6 +21,9 @@
     "open": "node scripts/open.mjs",
     "fonts:fetch": "esbuild scripts/fetch-fonts.ts --bundle --packages=external --platform=node --format=esm --outfile=out/fetch-fonts.mjs --log-level=warning && node out/fetch-fonts.mjs",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never",
+    "check:theme-lint": "esbuild --bundle --platform=node --format=esm --log-level=warning scripts/check-theme-lint.ts --outfile=out/check-theme-lint.mjs && node out/check-theme-lint.mjs",
+    "fonts:curate": "esbuild --bundle --platform=node --format=esm --log-level=warning scripts/curate-fonts.ts --outfile=out/curate-fonts.mjs && node out/curate-fonts.mjs",
+    "fonts:repair": "esbuild --bundle --platform=node --format=esm --log-level=warning scripts/repair-font-names.ts --outfile=out/repair-font-names.mjs && node out/repair-font-names.mjs",
     "dist": "electron-vite build && electron-builder --mac",
     "sync:linux": "sh scripts/sync-linux.sh",
     "install:mac": "electron-vite build && electron-builder --mac --dir --arm64 && rm -rf /Applications/Deckwerk.app && ditto dist/mac-arm64/Deckwerk.app /Applications/Deckwerk.app && codesign --verify --deep --strict /Applications/Deckwerk.app && echo \"Deckwerk liegt in /Applications (Launchpad, Spotlight)\""
@@ -41,6 +44,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "sherpa-onnx-node": "^1.13.8",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -74,10 +78,14 @@
       "package.json",
       "!node_modules/**",
       "node_modules/{ajv,ajv-formats,fast-deep-equal,fast-uri,json-schema-traverse,require-from-string,onnxruntime-common}/**",
-      "node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}"
+      "node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}",
+      "node_modules/sherpa-onnx-node/**",
+      "node_modules/sherpa-onnx-darwin-arm64/**"
     ],
     "asarUnpack": [
       "node_modules/onnxruntime-node/**",
+      "node_modules/sherpa-onnx-node/**",
+      "node_modules/sherpa-onnx-darwin-arm64/**",
       "skills/**"
     ],
     "npmRebuild": false,

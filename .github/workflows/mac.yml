@@ -43,7 +43,7 @@ jobs:
             npm run dist -- --publish never
           fi
 
-      # Das fertige Paket prüfen, nicht den Quellcode: Signatur, natives onnxruntime (Freisteller),
+      # Das fertige Paket prüfen, nicht den Quellcode: Signatur, natives onnxruntime (Freisteller) und sherpa-onnx (Spracherkennung),
       # MCP-Server (lädt ajv aus node_modules), App-Fenster (Screenshot) und Export (PPTX/DOCX/PDF/ZIP/PNG, Druck-PDF)
       - name: Paket prüfen
         run: |
@@ -54,6 +54,7 @@ jobs:
           spctl -a -t exec "$APP" 2>/dev/null && echo "Gatekeeper: notarisiert" || echo "Gatekeeper: nicht notarisiert (ad-hoc signiert)"
           test -f "$APP/Contents/Resources/app.asar.unpacked/skills/deckwerk/SKILL.md" || exit 1; echo "Skill ok"
           ELECTRON_RUN_AS_NODE=1 "$BIN" -e "require(process.resourcesPath + '/app.asar/node_modules/onnxruntime-node'); console.log('onnxruntime ok')"
+          ELECTRON_RUN_AS_NODE=1 "$BIN" -e "require(process.resourcesPath + '/app.asar/node_modules/sherpa-onnx-node'); console.log('sherpa-onnx ok')"
           { printf '%s\n' \
               '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
               '{"jsonrpc":"2.0","method":"notifications/initialized"}' \

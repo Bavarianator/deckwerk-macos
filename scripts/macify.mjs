@@ -27,8 +27,10 @@ pkg.build = {
   // skills/: SKILL.md für Claude Code/Codex (setup:mcp in ipc.ts liest ihn, install.sh kopiert ihn aus app.asar.unpacked)
   files: ['out/**', 'assets/**', 'examples/**', 'skills/**', 'package.json', '!node_modules/**',
     'node_modules/{ajv,ajv-formats,fast-deep-equal,fast-uri,json-schema-traverse,require-from-string,onnxruntime-common}/**',
-    'node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}'],
-  asarUnpack: ['node_modules/onnxruntime-node/**', 'skills/**'],
+    'node_modules/onnxruntime-node/{package.json,dist/**,bin/*/darwin/arm64/**}',
+    // sherpa-onnx (Spracherkennung im Video-Schnitt) ist nativ: Addon und macOS-arm64-Bibliotheken außerhalb des asar
+    'node_modules/sherpa-onnx-node/**', 'node_modules/sherpa-onnx-darwin-arm64/**'],
+  asarUnpack: ['node_modules/onnxruntime-node/**', 'node_modules/sherpa-onnx-node/**', 'node_modules/sherpa-onnx-darwin-arm64/**', 'skills/**'],
   npmRebuild: false,
   mac: { icon: 'assets/icon-mac.png', category: 'public.app-category.productivity', target: [{ target: 'dmg', arch: ['arm64'] }],
     // Ad-hoc-Signatur ('-'): ohne Developer-ID. identity: null ließe das Bundle unversiegelt, Apple Silicon meldet dann „beschädigt“.

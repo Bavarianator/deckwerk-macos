@@ -1,6 +1,6 @@
 ---
 name: deckwerk
-description: Präsentationen mit Deckwerk bauen oder überarbeiten – Folien, Decks, Vorträge, Pitches, Chef-Updates, Schulungen, Handouts, Instagram-Karussells, A4-Dokumente, Angebote und Flyer – und als PowerPoint (PPTX), PDF oder PNG exportieren. Nutzen, sobald jemand eine Präsentation, Folien, ein Deck, slides, a presentation oder eine pptx erstellen, aus einem Dokument oder Repo machen, verbessern, kürzen oder exportieren will oder eine deck.json öffnet. Arbeitet mit den MCP-Werkzeugen des Servers deckwerk (create_deck, add_slides, …).
+description: Präsentationen mit Deckwerk bauen oder überarbeiten – Folien, Decks, Vorträge, Pitches, Chef-Updates, Schulungen, Handouts, Instagram-Karussells, A4-Dokumente, Angebote, Flyer, Plakate, Briefe, Lebensläufe, Einladungen, Urkunden, Speisekarten und Visitenkarten – und als PowerPoint (PPTX), PDF oder PNG exportieren; dazu Videos schneiden – Shorts und Reels, gekürzte Fassungen, Stream-Highlights und Zusammenschnitte, auch per Link von YouTube, Twitch oder Kick – und als MP4 exportieren. Nutzen, sobald jemand eine Präsentation, Folien, ein Deck, slides, a presentation oder eine pptx erstellen, aus einem Dokument oder Repo machen, verbessern, kürzen oder exportieren will oder eine deck.json öffnet, oder wenn jemand aus Videos oder Streams Clips, Shorts, Reels, Highlights oder einen Zusammenschnitt machen will. Arbeitet mit den MCP-Werkzeugen des Servers deckwerk (create_deck, add_slides, …).
 ---
 
 # Deckwerk: Präsentationen, die man dem Chef zeigen kann
@@ -13,12 +13,12 @@ Die Werkzeuge kommen vom MCP-Server `deckwerk` (in Claude Code `mcp__deckwerk__�
 
 ## 1. Zuerst den Guide lesen
 
-Rufe `read_guide` mit `part` 1, 2, … auf, bis die Antwort „Teil n von n“ meldet. Er enthält den Design-Guide und den Layout-Katalog mit allen Feldnamen. Ohne ihn rätst du Felder (Schemafehler) und Gestaltung. Einmal pro Sitzung genügt.
+Rufe `read_guide` mit `part` 1, 2, … auf, bis die Antwort „Teil n von n“ meldet. Er enthält den Design-Guide und den Layout-Katalog mit allen Feldnamen. Ohne ihn rätst du Felder (Schemafehler) und Gestaltung. Einmal pro Sitzung genügt. Für reine Video-Aufträge genügt `read_guide` mit `topic: "video"`.
 
 ## 2. Briefing und Material
 
 - Höchstens 2–3 Rückfragen: Zielgruppe, Ziel oder Entscheidung, Umfang und Anlass. Fehlt etwas, triff eine sinnvolle Annahme und nenne sie.
-- **Format:** Standard ist 16:9. Für Instagram (Karussell 4:5 oder 1:1, Story 9:16) oder Druck (A4) beim Anlegen `create_deck` mit `format` aufrufen; Gerüst und Textmenge stehen im Guide §3 (Karussell, A4-Dokument mit `doc-text`/`offer`, Flyer mit `flyer`; beidseitig `flyer` + `flyer-back`).
+- **Format:** Standard ist 16:9. Für Instagram (Karussell 4:5 oder 1:1, Story 9:16) oder Druck (A4) beim Anlegen `create_deck` mit `format` aufrufen; Gerüst und Textmenge stehen im Guide §3 (Karussell, A4-Dokument mit `doc-text`/`offer`, Flyer mit `flyer`; beidseitig `flyer` + `flyer-back`). Weitere Drucksachen auf A4 hoch: `letter` (Brief nach DIN 5008), `cv` (Lebenslauf), `invitation` (Einladung), `menu` (Speisekarte); `certificate` (Urkunde) auf `a4-quer`; `business-card` im Format `visitenkarte` (zwei Seiten: front und back).
 - **Quellmaterial:** Nennt der Nutzer Dateien (Bericht, README, Tabelle, Notizen), lies sie selbst und übernimm nur belegte Zahlen. Fehlt eine Zahl, nimm einen deutlich markierten Platzhalter und liste ihn am Ende auf. Nie stillschweigend erfinden.
 - **Vorhandenes Deck:** `open_deck` mit dem Pfad, dann `get_deck`. Gezielt mit `update_slide` ändern statt neu bauen.
 
@@ -45,9 +45,11 @@ Dann zeige die Storyline als nummerierte Liste der Titel im Chat (Datenfolien al
 
 ## 4. Look
 
-- Ohne Vorgabe: `propose_looks` mit drei eigenen Entwürfen: einem hellen, sachlichen, einem dunklen oder plakativen und einem Überraschungsentwurf, der unerwartet, aber aus dem Thema begründet ist. Sie sollen sich in der Struktur unterscheiden (Serif/Sans, titleSize, rule, sectionTone, labelFont, elements für die Bauteile: line, plain, solid nur im Stil mutig), nicht nur in der Farbe. Jedes Design trägt eine unerwartete Entscheidung (Guide §6). Im Stil mutig sind auch `plakat`, `magazin`, `neomono` und `pastell` Kandidaten. Lass den Nutzer wählen. Gibt er Marke, Farben oder Theme vor, rufe direkt `create_deck` auf.
+- Ohne Vorgabe: `propose_looks` mit drei eigenen Entwürfen: einem hellen, sachlichen, einem dunklen oder plakativen und einem Überraschungsentwurf, der unerwartet, aber aus dem Thema begründet ist. Sie sollen sich in der Struktur unterscheiden (Serif/Sans, titleSize, rule, sectionTone, labelFont, elements für die Bauteile: line, plain, solid nur im Stil mutig; sparsam auch signature, margin/measure, heroTone, field), nicht nur in der Farbe. Jedes Design trägt eine unerwartete Entscheidung (Guide §6). Im Stil mutig sind auch `plakat`, `magazin`, `neomono` und `pastell` Kandidaten. Lass den Nutzer wählen. Gibt er Marke, Farben oder Theme vor, rufe direkt `create_deck` auf.
 - **Brand-Kit:** Hat der Nutzer in Deckwerk eine Marke (Farben, Schriften, Logo) gespeichert, wendet `create_deck` sie automatisch an und nennt das im Ergebnis. Dann Akzentfarbe und Schriften nicht überschreiben; `brand: null` nur auf ausdrücklichen Wunsch. Der Hausstil ergänzt die Marke (Ton, Anrede), die Marke bestimmt Farbe und Schrift.
 - `create_deck` mit genau dem gewählten `customTheme`. Die Vorschau im Ergebnis wie ein Art Director prüfen.
+- **Theme-Lint:** Eigene Designs mit Klischee-Palette, Creme/Pastell- oder Mittelton-Grund, Neon-Akzent oder Standardschrift generierter Designs lehnen die Werkzeuge mit konkreter Korrektur ab: korrigieren und erneut aufrufen. `override` mit Begründung nur, wenn der Nutzer es ausdrücklich so will (z. B. Markenfarbe). „Theme-Hinweise“ im Ergebnis abwägen.
+- **Feinschliff:** `tune` in `create_deck`/`update_deck` legt Struktur-Tokens (z. B. `margin`, `signature`, `heroTone`) über jedes Theme, auch über Katalog-Themes; `null` entfernt einen Wert (Guide §6 „Feinschliff“).
 - **Stil des Decks** (`style` in `create_deck`/`update_deck`): Ohne Vorgabe wählst du ihn beim Anlegen nach Anlass und nennst die Wahl in einem Halbsatz. Eine Vorgabe des Nutzers hat Vorrang; bestehende Decks nur auf Wunsch umstellen.
   - **Mutig** für Vortrag, Schule, Verein, Event, Kampagne, Kultur, Marketing, Produktvorstellung, Social-Karussell oder wenn der Nutzer „mutiger“, „plakativ“ bzw. „verspielter“ will. Dann erlaubt Guide §6 „Stil des Decks“ kräftigen Farbgrund (`vivid`), Plakat-Typo, mehr Farbflächen und markante Bilder.
   - **Sachlich** für Chef-Update, Entscheidungsvorlage, Antrag, Bericht, Finanzen, Projektstatus, A4-Dokument, Angebot: Zurückhaltung statt Deko. Eine Akzentfarbe, Hierarchie über Größe und Weißraum. Sticker, Blobs, Verläufe und Icons als Schmuck nur auf ausdrücklichen Wunsch.
@@ -93,8 +95,21 @@ Dann zeige die Storyline als nummerierte Liste der Titel im Chat (Datenfolien al
 
 - `save_deck` speichert nach `~/Deckwerk/<titel>/deck.json`. Nenne den Pfad; der Nutzer öffnet die Datei in der Deckwerk-App (Doppelklick auf `deck.json`) und kann dort weiterarbeiten.
 - Exportieren nur auf Wunsch: `export_deck` mit `pptx`, `docx` (Word: Text bearbeitbar, Gestaltung als Hintergrundbild), `pdf`, `png`, `zip` (alle Bilder plus PDF in einer Datei, für Karussells) oder `md` (Handout). Pfade nennen; bei Nicht-16:9 tragen die Dateien das Format im Namen (`-4x5`, `-a4`).
-- Flyer für die Druckerei: `export_deck` mit `format: "print"` (`…-druck.pdf`, Endformat plus Beschnitt `bleed`, Standard 3 mm; `size` a3/a5). Vorher nicht gewählte Entwürfe löschen, damit die Seitenzahl (1 oder 2) zur Bestellung passt. Farben bleiben RGB; bei großer Auflage Probedruck raten. Lint `print-res` (Foto unter 250 ppi) vorher beheben.
+- Drucksachen für die Druckerei: `export_deck` mit `format: "print"` (`…-druck.pdf`, Endformat plus Beschnitt `bleed`, Standard 3 mm). A4-Decks skaliert `size` verlustfrei: a2/a3 = Plakat, a5 = Flyer, a6 = Postkarte oder Einladung; die Visitenkarte druckt in ihrer eigenen Größe. Vorher nicht gewählte Entwürfe löschen, damit die Seitenzahl (1 oder 2) zur Bestellung passt. Farben bleiben RGB; bei großer Auflage Probedruck raten. Lint `print-res` (Foto unter 250 ppi) vorher beheben.
 - Kurzer Bericht: Folienzahl, Storyline in einem Satz, getroffene Annahmen und was der Nutzer ersetzen muss (Zahlen, Zitate, Fotos).
+
+## 9. Video schneiden
+
+Will der Nutzer aus Videos Shorts, eine gekürzte Fassung, Stream-Highlights oder einen Zusammenschnitt, gilt Guide §11 „Video“. Eine Folie im Layout `clip` ist ein Video aus Ausschnitten. Meldet ein Video-Tool „läuft noch“, gleich noch einmal mit denselben Eingaben aufrufen.
+- **Material:** asset://-Pfad aus dem Anhang, absoluter Pfad oder per Link `import_video` (YouTube, Twitch, Kick). Nur Material, an dem der Nutzer die Rechte hat oder das frei lizenziert ist; laufende Livestreams erst nach dem Ende.
+- **Sprache:** Ohne `lang` transkribiert Parakeet, das nur 25 europäische Sprachen kennt. Bei Sprachen außerhalb Europas (z. B. Japanisch, Türkisch, Arabisch) `lang` setzen – dann Whisper.
+- **Short/Reel (9:16):** `transcribe_video` → 3–5 stärkste Momente (Hook in den ersten 3 s, ohne Vorwissen verständlich, Bogen bis zum Payoff, zitierfähig, abgeschlossenes Ende), je ideal 55–75 s (hart 20–90), Schnitte nur an Segmentgrenzen, gelistete Neuansätze herausschneiden → `video_frames` als Kontaktabzug → `create_deck` `format: "9:16"`, `transition: "none"`, je Short eine `clip`-Folie (`hook` ≤ 70 Zeichen ohne Clickbait und Emojis, `captions` `wort`, `style` `lebendig`, `fit` `crop` mit Auto-Zuschnitt aufs Gesicht oder `blur` bei Folien und Gesten am Rand, `follow` `sprecher` bei mehreren Personen, `ton` `klar` bei Sprache aus Handy/Webcam, `cover` = Quellsekunde fürs Titelbild aus dem Kontaktabzug, `post` = Titel ≤ 100 Zeichen, 1–2 Sätze, 3–5 Hashtags) → `export_deck` `clips` (je Short MP4, Cover .jpg, Post-Text .txt).
+- **Auswahl:** Kandidaten 4 × 0–25 bewerten (Hook, Bogen, Wert, Teilbarkeit), nur ≥ 70 nehmen; Shorts ideal 55–75 s (hart 20–90), steht für sich allein, keine doppelten Aussagen, lieber 4–8 gute als 2. Details Guide §11.
+- **Grob → fein:** `video_highlights` mit `overview: true`, dann nur die besten Fenster transkribieren; Stellen per `search_transcript` (Thema oder Zitat).
+- **Selbstkontrolle:** Clip-Prüfung in der `add_slides`-Antwort beheben; vor dem Export `check_clip` für die besten Clips, Kontaktabzug ansehen, höchstens 2 Runden.
+- **Ganzes Video kürzen (16:9):** `transcribe_video` mit `all: true` → eine `clip`-Folie je Quelle mit allen behaltenen Ausschnitten in Reihenfolge (bis 100), Neuansätze herausschneiden, `pauses` `kurz`, `ton` `klar` bei Sprache (nie bei Musik), `captions` `satz` oder `aus` → `export_deck` `mp4`.
+- **Stream (2–8 h) und Videos über 10 min:** `video_highlights` → nur die besten Fenster mit `transcribe_video` `from`/`to` → Kontaktabzug → Shorts, auf Wunsch ein 16:9-Zusammenschnitt.
+- **Kompilation:** je Quelle eine `clip`-Folie, dazwischen ruhige Zwischentitel (`section`, `statement`), `transition` `fade` nur dort; Musik dezent über `find_music` und `update_deck` `music`, CC-BY-Nachweis in die Notes der letzten Folie → `export_deck` `mp4`.
 
 ## Häufige Fehler
 
