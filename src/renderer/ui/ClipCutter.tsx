@@ -101,7 +101,7 @@ export function ClipCutter({ content, size, disabled, onApply, onClose }: Props)
     else if ((k === 'i' || e.key === '[') && canStart) setEdge(sel, 'start', t)
     else if ((k === 'o' || e.key === ']') && canEnd) setEdge(sel, 'end', t)
     else if (k === 's') split()
-    else if (e.key === 'Delete' && !btn) remove()
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && !btn) remove()
     else return
     e.preventDefault()
   }
@@ -173,14 +173,14 @@ export function ClipCutter({ content, size, disabled, onApply, onClose }: Props)
           <span className="cut-gap" />
           <button className="btn" onClick={split} disabled={!canSplit} title="An der Abspielposition teilen (S)"><Scissors size={14} /> Teilen</button>
           <button className="btn" onClick={add} disabled={!canAdd} title="Neuer Ausschnitt ab der Abspielposition, nach dem gewählten"><Plus size={14} /> Neu</button>
-          <button className="btn" onClick={remove} disabled={parts.length < 2} title="Ausschnitt löschen (Entf)"><Trash2 size={14} /> Löschen</button>
+          <button className="btn" onClick={remove} disabled={parts.length < 2} title="Ausschnitt löschen (⌫)"><Trash2 size={14} /> Löschen</button>
         </div>
         {wide && (
           <label className="field cut-focus"><span>Bildausschnitt</span>
             <input type="range" min={0} max={1} step={0.01} value={p.focus ?? 0.5} onChange={(e) => patch(sel, { focus: r2(e.currentTarget.valueAsNumber) })} aria-label="Bildausschnitt von links nach rechts" />
           </label>
         )}
-        <p className="look-hint">Leertaste abspielen · ← → 0,1 s (mit ⇧ 1 s) · I / O oder [ ] Anfang und Ende · S teilen · Entf löschen · ↑ ↓ Ausschnitt wählen · Hook und Untertitel siehst du erst im MP4</p>
+        <p className="look-hint">Leertaste abspielen · ← → 0,1 s (mit ⇧ 1 s) · I / O oder [ ] Anfang und Ende · S teilen · ⌫ löschen · ↑ ↓ Ausschnitt wählen · Hook und Untertitel siehst du erst im MP4</p>
       </div>
     </div>,
     document.body,

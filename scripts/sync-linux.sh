@@ -4,11 +4,13 @@
 set -e
 cd "$(dirname "$0")/.."
 SRC="${DECKWERK_LINUX:-$HOME/deckwerk}"
+# Stand überschreibbar, z. B. DECKWERK_REF=origin/master, wenn ~/deckwerk auf einem alten Feature-Branch steht
+REF="${DECKWERK_REF:-HEAD}"
 [ -f "$SRC/package.json" ] || { echo "Linux-Projekt nicht gefunden: $SRC" >&2; exit 1; }
 # Nur den committeten Stand (HEAD) übernehmen: im Arbeitsverzeichnis von ~/deckwerk liegt oft Unfertiges anderer Sitzungen
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-git -C "$SRC" archive HEAD | tar -x -C "$TMP"
-echo "Übernehme $(git -C "$SRC" log -1 --format='%h %s' HEAD)"
+git -C "$SRC" archive "$REF" | tar -x -C "$TMP"
+echo "Übernehme $(git -C "$SRC" log -1 --format='%h %s' "$REF")"
 # Mac-eigene Dateien (README, CLAUDE.md, Mac-Icon, keine Linux-Installer, Workflows, diese Sync-Skripte) bleiben; website/ ist die Projektseite der Linux-Version
 rsync -a --delete --checksum \
   --exclude node_modules --exclude out --exclude exports --exclude dist --exclude .git --exclude .github --exclude .claude --exclude website \
