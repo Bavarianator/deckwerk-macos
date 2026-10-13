@@ -8,7 +8,7 @@ set -e
 BASE=https://github.com/Bavarianator/deckwerk-macos/releases
 # Ohne Argument: neuestes festes Release, sonst der laufende Stand „latest“; mit Argument: dieses Release (z. B. v0.1.0)
 if [ -n "$1" ]; then URLS="$BASE/download/$1/Deckwerk-arm64.dmg"
-else URLS="$BASE/latest/download/Deckwerk-arm64.dmg $BASE/download/latest/Deckwerk-arm64.dmg"; fi
+else URLS="$BASE/download/latest/Deckwerk-arm64.dmg $BASE/latest/download/Deckwerk-arm64.dmg"; fi # „latest“ ist ein Prerelease: nur der erste Weg liefert es, der zweite (für ein festes Release) käme sonst zuerst mit 404
 
 TMP=$(mktemp -d); trap 'hdiutil detach -quiet "$MNT" 2>/dev/null; rm -rf "$TMP"' EXIT
 for URL in $URLS; do curl -fL --progress-bar "$URL" -o "$TMP/Deckwerk.dmg" && break; done
